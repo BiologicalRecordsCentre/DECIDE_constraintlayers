@@ -1,5 +1,3 @@
 # DECIDE_constraintlayers
 
-Line from rstudio
-
-... And from github
+Processing the constraint layers for the DECIDE project.
