@@ -73,9 +73,9 @@ plot(c_buf$geometry)
 # individually - code from Reto
 
 # create overlapping grid
-uk_map <- st_as_sf(getData("GADM", country = "GBR", level = 1))
+uk_map <- st_as_sf(getData("GADM", country = "GBR", level = 0, path='Data/raw_data/UK_grids'))
 uk_map <- st_transform(uk_map, 27700)
-uk_grid <- st_make_grid(uk_map, cellsize = 25000, what = 'polygons', square=TRUE)
+uk_grid <- sf::st_make_grid(uk_map, cellsize = 25000, what = 'polygons', square=TRUE)
 uk_grid2 <- st_make_grid(uk_map, cellsize = 25000, what = 'polygons', square=TRUE, offset = c(extent(uk_map)[1]-50000, extent(uk_map)[3]))
 uk_grid3 <- st_make_grid(uk_map, cellsize = 25000, what = 'polygons', square=TRUE, offset = c(extent(uk_map)[1], extent(uk_map)[3]-50000))
 # uk_grid4 <- st_make_grid(uk_map, cellsize = 50000, what = 'polygons', square=TRUE)
@@ -164,7 +164,7 @@ plot(st_geometry(uk_grid_all)[st_intersects(st_buffer(pt_sf, 40000), simp_grid)[
 ###### Splitting bridleway into grids #######
 BNG_prow <- ap_merge
 BNG_prow
-uk_map <- st_as_sf(getData("GADM", country = "GBR", level = 1))
+uk_map <- st_as_sf(getData("GADM", country = "GBR", level = 1, path='Data/raw_data/UK_grids'))
 uk_map <- st_transform(uk_map, 27700)
 uk_grid <- st_make_grid(uk_map, cellsize = 25000, what = 'polygons', square=TRUE)
 grid_intersect <- apply(st_intersects(uk_grid, uk_map, sparse = FALSE), 1, any)
@@ -210,7 +210,7 @@ system.time(
 # get grid for UK
 uk_map <- st_as_sf(getData("GADM", country = "GBR", level = 1))
 uk_map <- st_transform(uk_map, 27700)
-uk_grid <- st_make_grid(uk_map, cellsize = 100000, what = 'polygons', square=TRUE)
+uk_grid <- st_make_grid(uk_map, cellsize = 25000, what = 'polygons', square=TRUE)
 grid_intersect <- apply(st_intersects(uk_grid, uk_map, sparse = FALSE), 1, any)
 simp_grid_uk2 <- uk_grid[grid_intersect]
 plot(st_geometry(uk_map), reset = T)
