@@ -3,7 +3,8 @@
 
 library(tidyverse)
 library(readxl)
-pol <- read_xlsx('/data/notebooks/rstudio-adaptivesampling/data/taxonomy/butterfly_moth_orthop_conservation_designation.xlsx')
+
+pol <- read_xlsx('/data/notebooks/rstudio-adaptsampthomas/DECIDE_adaptivesampling/Data/taxonomy/butterfly_moth_orthop_conservation_designation.xlsx')
 head(pol)
 
 pt <- pol %>% mutate(species = `Recommended taxon name`,
@@ -63,6 +64,10 @@ filt_crit <- function(crit){
 
 filt_crit(criteria)
 
+
+
+#####     Cleaning the policy file     #####
+
 # Biodiversity action plan
 bio_act <- pt[grep(pattern = 'Biodiversity Action', x  = pt$rep_cat),]
 unique(bio_act$rep_cat)
@@ -114,6 +119,8 @@ wild_NI <- wild_NI %>%
 clean_pol <- rbind(bio_act, iucn, hab_dir, wild, wild_NI) %>% 
   select(-rep_cat, -desig)
 clean_pol
+
+write.csv(clean_pol, file = '/data/notebooks/rstudio-adaptsampthomas/DECIDE_adaptivesampling/Data/taxonomy/species_policy_cleaned.csv')
 
 
 #####    Testing outline of function
