@@ -29,8 +29,26 @@ plot(st_geometry(lancs)) ## lancaster and Forest of Bowland
 
 
 ###### Splitting access land into grids #######
+
+# load in uk map
 uk <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_map.shp')
-uk_grid <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_grid_25km.shp')
+st_crs(uk) <- 27700
+
+# # create grid
+# uk_grid_10k <- sf::st_make_grid(uk, cellsize = 10000, what = 'polygons', square=TRUE)
+# # grid_intersect <- apply(st_intersects(uk, uk_grid_10k, sparse = FALSE), 1, any)
+# # simp_grid_uk <- uk[grid_intersect, ]
+# 
+# # check with plot
+# plot(st_geometry(uk))
+# plot(st_geometry(uk_grid_10k), border = 'orange', add = TRUE)
+# 
+# # write to file
+# st_write(obj = uk_grid_10k, dsn = '/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_grid_10km.shp',
+#          driver = "ESRI Shapefile", delete_layer = T)
+
+# read in grid
+uk_grid <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_grid_10km.shp')
 
 st_crs(uk) <- 27700
 st_crs(uk_grid) <- 27700
@@ -46,18 +64,23 @@ crow_valid[st_intersects(crow_valid, uk_grid[1,], sparse = F),]
 dim(uk_grid)[1]
 
 
-# system.time(
-#   for(i in 1:dim(uk_grid)[1]){
-#     print(i)
-#     
-#     grid_sub <- crow_valid[st_intersects(crow_valid, uk_grid[i,], sparse = F),]
-#     
-#     # st_write(grid_sub, dsn = paste0('Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data/prow_gridnumber_',i,'.shp'),
-#     #          driver = "ESRI Shapefile", delete_layer = T)
-#     
-#     saveRDS(grid_sub, 
-#             file = paste0('Data/raw_data/CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data/access_land_gridnumber_',i,'.rds'))
-#     
-#   }
-# )
+system.time(
+  for(i in 2684:dim(uk_grid)[1]){
+    print(i)
+
+    grid_sub <- crow_valid[st_intersects(crow_valid, uk_grid[i,], sparse = F),]
+   
+    if(dim(grid_sub)!=0 && class(st_geometry(grid_sub))[1]=="sfc_GEOMETRY"){
+          grid_sub <- st_collection_extract(grid_sub, "POLYGON")
+    }
+    
+
+    st_write(grid_sub, dsn = paste0('Data/raw_data/CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/access_land_gridnumber_',i,'.shp'),
+             driver = "ESRI Shapefile", delete_layer = T)
+
+    # saveRDS(grid_sub,
+    #         file = paste0('Data/raw_data/CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data/access_land_gridnumber_',i,'.rds'))
+
+  }
+)
 

@@ -29,26 +29,19 @@ t_geo_r
 
 #####     split Greenspaces up into grids    ##### 
 st_crs(t_geo_r) <- 27700
- 
-uk_map <- st_as_sf(getData("GADM", country = "GBR", level = 1))
-uk_map <- st_transform(uk_map, 27700)
-uk_grid <- st_make_grid(uk_map, cellsize = 25000, what = 'polygons', square=TRUE)
-grid_intersect <- apply(st_intersects(uk_grid, uk_map, sparse = FALSE), 1, any)
 
-plot(st_geometry(uk_map))
-plot(st_geometry(uk_grid[grid_intersect ]), border = 'orange', add = TRUE)
+# read in map and grid of desired cell size
+uk <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_map.shp')
+uk_grid <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_grid_10km.shp')
 
-simp_grid_uk <- uk_grid[grid_intersect ]
+st_crs(uk) <- 27700
+st_crs(uk_grid) <- 27700
 
-# get all the paths in grid number 3
-g <- (simp_grid_uk[[3]])
-plot(g, add = T, border = 'red')
-
-ints <- st_intersects(t_geo_r, g, sparse = F)
-unique(ints)
+plot(st_geometry(uk), reset = T)
+plot(st_geometry(uk_grid), add = T, border = 'orange')
 
 # all in one line
-(t_geo_r)[st_intersects(t_geo_r, simp_grid_uk[[3]], sparse = F),]
+(t_geo_r)[st_intersects(t_geo_r, uk_grid[3,], sparse = F),]
 
 ## so, now is easy to loop through and save the footpaths in each grid to file
 ## will need to redo this once we have the footpaths for scotland and missing places
@@ -56,17 +49,19 @@ length(simp_grid_uk)
 t_geo_r
 
 
+doParallel::registerDoParallel(detectCores()-1)
+
 system.time(
-  for(i in 1:length(simp_grid_uk)){
+  foreach(i = 1:length(st_geometry(uk_grid))) %dopar% {
     print(i)
 
-    grid_sub <- t_geo_r[st_intersects(t_geo_r, simp_grid_uk[[i]], sparse = F),]
+    grid_sub <- t_geo_r[st_intersects(t_geo_r, uk_grid[i,], sparse = F),]
 
-    # st_write(grid_sub, dsn = paste0('Data/raw_data/OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_greenspace_data/grnspc_gridnumber_',i,'.shp'),
-    #          driver = "ESRI Shapefile", delete_layer = T)
+    st_write(grid_sub, dsn = paste0('Data/raw_data/OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_greenspace_data_10km/grnspc_gridnumber_',i,'.shp'),
+             driver = "ESRI Shapefile", delete_layer = T)
     
-    saveRDS(grid_sub, 
-            file = paste0('Data/raw_data/OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_greenspace_data/grnspc_gridnumber_',i,'.rds')) 
+    # saveRDS(grid_sub, 
+    #         file = paste0('Data/raw_data/OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_greenspace_data/grnspc_gridnumber_',i,'.rds')) 
     
   }
 )
@@ -98,43 +93,45 @@ t_acp_geo
 #####     split access points up into grids    ##### 
 st_crs(t_acp_geo) <- 27700
 
-uk_map <- st_as_sf(getData("GADM", country = "GBR", level = 1))
-uk_map <- st_transform(uk_map, 27700)
-uk_grid <- st_make_grid(uk_map, cellsize = 25000, what = 'polygons', square=TRUE)
-grid_intersect <- apply(st_intersects(uk_grid, uk_map, sparse = FALSE), 1, any)
+# read in map and grid of desired cell size
+uk <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_map.shp')
+uk_grid <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_grid_10km.shp')
 
-plot(st_geometry(uk_map))
-plot(st_geometry(uk_grid[grid_intersect ]), border = 'orange', add = TRUE)
+st_crs(uk) <- 27700
+st_crs(uk_grid) <- 27700
 
-simp_grid_uk <- uk_grid[grid_intersect ]
+plot(st_geometry(uk), reset = T)
+plot(st_geometry(uk_grid), add = T, border = 'orange')
+
 
 # get all the paths in grid number 3
-g <- (simp_grid_uk[[3]])
+g <- (uk_grid[100,])
 plot(g, add = T, border = 'red')
 
 ints <- st_intersects(t_acp_geo, g, sparse = F)
 unique(ints)
 
 # all in one line
-(t_acp_geo)[st_intersects(t_acp_geo, simp_grid_uk[[3]], sparse = F),]
+(t_acp_geo)[st_intersects(t_acp_geo, uk_grid[[3]], sparse = F),]
 
 ## so, now is easy to loop through and save the footpaths in each grid to file
 ## will need to redo this once we have the footpaths for scotland and missing places
 length(simp_grid_uk)
 t_acp_geo
 
+doParallel::registerDoParallel(detectCores()-1)
 
 system.time(
-  for(i in 1:length(simp_grid_uk)){
+  foreach(i = 1:length(st_geometry(uk_grid))) %dopar% {
     print(i)
 
-    grid_sub <- t_acp_geo[st_intersects(t_acp_geo, simp_grid_uk[[i]], sparse = F),]
+    grid_sub <- t_acp_geo[st_intersects(t_acp_geo, uk_grid[i,], sparse = F),]
 
-    # st_write(grid_sub, dsn = paste0('Data/raw_data/OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_accesspoint_data/accspnt_gridnumber_',i,'.shp'),
-    #          driver = "ESRI Shapefile", delete_layer = T)
+    st_write(grid_sub, dsn = paste0('Data/raw_data/OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_accesspoint_data_10km/accspnt_gridnumber_',i,'.shp'),
+             driver = "ESRI Shapefile", delete_layer = T)
     
-    saveRDS(grid_sub, 
-            file = paste0('Data/raw_data/OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_accesspoint_data/accspnt_gridnumber_',i,'.rds')) 
+    # saveRDS(grid_sub, 
+    #         file = paste0('Data/raw_data/OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_accesspoint_data/accspnt_gridnumber_',i,'.rds')) 
     
   }
 )
