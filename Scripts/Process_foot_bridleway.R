@@ -164,42 +164,58 @@ plot(st_geometry(uk_grid_all)[st_intersects(st_buffer(pt_sf, 40000), simp_grid)[
 ###### Splitting bridleway into grids #######
 BNG_prow <- ap_merge
 BNG_prow
-uk_map <- st_as_sf(getData("GADM", country = "GBR", level = 1, path='Data/raw_data/UK_grids'))
-uk_map <- st_transform(uk_map, 27700)
-uk_grid <- st_make_grid(uk_map, cellsize = 25000, what = 'polygons', square=TRUE)
-grid_intersect <- apply(st_intersects(uk_grid, uk_map, sparse = FALSE), 1, any)
 
-plot(st_geometry(uk_map))
-plot(st_geometry(uk_grid[grid_intersect ]), border = 'orange', add = TRUE)
+# read in map and grid of desired cell size
+uk <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_map.shp')
+uk_grid <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_grid_10km.shp')
 
-simp_grid_uk <- uk_grid[grid_intersect ]
+st_crs(uk) <- 27700
+st_crs(uk_grid) <- 27700
 
-g <- (simp_grid_uk[[3]])
-plot(g, add = T, border = 'red')
+plot(st_geometry(uk), reset = T)
+plot(st_geometry(uk_grid), add = T, border = 'orange')
 
-ints <- st_intersects(BNG_prow, g, sparse = F)
-unique(ints)
-
-# all in one line
-(BNG_prow)[st_intersects(BNG_prow, simp_grid_uk[[3]], sparse = F),]
+# plot(st_geometry(uk_map))
+# plot(st_geometry(uk_grid[grid_intersect ]), border = 'orange', add = TRUE)
+# 
+# simp_grid_uk <- uk_grid[grid_intersect ]
+# 
+# g <- (simp_grid_uk[[3]])
+# plot(g, add = T, border = 'red')
+# 
+# ints <- st_intersects(BNG_prow, g, sparse = F)
+# unique(ints)
+# 
+# # all in one line
+# (BNG_prow)[st_intersects(BNG_prow, simp_grid_uk[[3]], sparse = F),]
 
 ## so, now is easy to loop through and save the footpaths in each grid to file
 ## will need to redo this once we have the footpaths for scotland and missing places
-length(simp_grid_uk)
+length(st_geometry(uk_grid))
 # geom_bng_prow <- st_geometry(BNG_prow)
 
+library(foreach)
+
+doParallel::registerDoParallel(detectCores()-1)
 
 system.time(
-  for(i in 1:length(simp_grid_uk)){
+  foreach(i = 1:length(st_geometry(uk_grid))) %dopar% {
     print(i)
 
-    grid_sub <- BNG_prow[st_intersects(BNG_prow, simp_grid_uk[[i]], sparse = F),]
+    grid_sub <- BNG_prow[st_intersects(BNG_prow, uk_grid[i,], sparse = F),]
 
-    # st_write(grid_sub, dsn = paste0('Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data/prow_gridnumber_',i,'.shp'),
-    #          driver = "ESRI Shapefile", delete_layer = T)
+    if(dim(grid_sub)[1] > 0){ ## if grid cell contains some of shape
+      
+      print('###   grid contains PROW   ###')
+      
+      st_write(grid_sub, dsn = paste0('Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/prow_gridnumber_',i,'.shp'),
+               driver = "ESRI Shapefile", delete_layer = T)
+      
+    }
     
-    saveRDS(grid_sub, 
-            file = paste0('Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data/prow_gridnumber_',i,'.rds'))
+    
+    # saveRDS(grid_sub, 
+    #         file = paste0('Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data/prow_gridnumber_',i,'.rds'))
     
   }
 )
