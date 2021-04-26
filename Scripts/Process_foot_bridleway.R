@@ -204,8 +204,15 @@ system.time(
 
     grid_sub <- BNG_prow[st_intersects(BNG_prow, uk_grid[i,], sparse = F),]
 
-    st_write(grid_sub, dsn = paste0('Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/prow_gridnumber_',i,'.shp'),
-             driver = "ESRI Shapefile", delete_layer = T)
+    if(dim(grid_sub)[1] > 0){ ## if grid cell contains some of shape
+      
+      print('###   grid contains PROW   ###')
+      
+      st_write(grid_sub, dsn = paste0('Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/prow_gridnumber_',i,'.shp'),
+               driver = "ESRI Shapefile", delete_layer = T)
+      
+    }
+    
     
     # saveRDS(grid_sub, 
     #         file = paste0('Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data/prow_gridnumber_',i,'.rds'))

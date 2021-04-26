@@ -56,8 +56,8 @@ st_crs(uk_grid) <- 27700
 plot(st_geometry(uk), reset = T)
 plot(st_geometry(uk_grid), add = T, border = 'orange')
 
-prow_loc <- '/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km'
-list.files(prow_loc)
+# prow_loc <- '/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km'
+# list.files(prow_loc)
 
 # which grids intersect london?
 grid_num <- st_intersects(lond_paths, uk_grid, sparse = T)
@@ -81,12 +81,12 @@ for(i in c(350:600)) {
     next
   }
   
-  # original prow files
-  prow_files <- list.files(prow_loc,
-                           full.names = T,
-                           pattern = paste0('_', i, '.shp'))
-  
-  orig_file <- st_read(prow_files)
+  # # original prow files
+  # prow_files <- list.files(prow_loc,
+  #                          full.names = T,
+  #                          pattern = paste0('_', i, '.shp'))
+  # 
+  # orig_file <- st_read(prow_files)
   
   
   # if(dim(orig_file)[1]>0 && dim(lond_paths_sub)[1] > 0){
@@ -99,9 +99,11 @@ for(i in c(350:600)) {
   # if(dim(orig_file)[1]==0 && 
   if(dim(lond_paths_sub)[1] > 0){
     
-    print('###   only paths from london being saved   ###')
+    # save output
+    print('#####    saving output     #####')
     
-    out_file <- lond_paths_sub
+    st_write(lond_paths_sub, dsn = paste0('Data/raw_data/greater-london-latest-free/london_gridded_data_10km/lond_paths_gridnumber_',i,'.shp'),
+             driver = "ESRI Shapefile", delete_layer = T)
     
   } else {
     
@@ -110,11 +112,7 @@ for(i in c(350:600)) {
     
   }
   
-  # save output
-  print('#####    saving output     #####')
   
-  st_write(out_file, dsn = paste0('Data/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/prow_gridnumber_',i,'.shp'),
-           driver = "ESRI Shapefile", delete_layer = T)
   
 }
 

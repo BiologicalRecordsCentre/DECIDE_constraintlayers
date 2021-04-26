@@ -65,7 +65,7 @@ dim(uk_grid)[1]
 
 
 system.time(
-  for(i in 2684:dim(uk_grid)[1]){
+  for(i in 1:dim(uk_grid)[1]){
     print(i)
 
     grid_sub <- crow_valid[st_intersects(crow_valid, uk_grid[i,], sparse = F),]
@@ -74,9 +74,15 @@ system.time(
           grid_sub <- st_collection_extract(grid_sub, "POLYGON")
     }
     
-
-    st_write(grid_sub, dsn = paste0('Data/raw_data/CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/access_land_gridnumber_',i,'.shp'),
-             driver = "ESRI Shapefile", delete_layer = T)
+    if(dim(grid_sub)[1] > 0){ ## if grid cell contains some of shape
+      
+      print('###   grid contains access land   ###')
+      
+      st_write(grid_sub, dsn = paste0('Data/raw_data/CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/access_land_gridnumber_',i,'.shp'),
+               driver = "ESRI Shapefile", delete_layer = T)
+      
+    }
+    
 
     # saveRDS(grid_sub,
     #         file = paste0('Data/raw_data/CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data/access_land_gridnumber_',i,'.rds'))
