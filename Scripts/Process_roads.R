@@ -3,6 +3,8 @@
 library(sf)
 library(tidyverse)
 
+####    Testing
+
 # load a road network
 list.files('Data/raw_data/OS_roadnetwork/data', pattern = 'Link.shp')
 
@@ -45,6 +47,9 @@ motor_jun
 plot(motor_jun, add = T)
 
 
+
+####    Splitting into grids    ####
+
 ####    for loop to go through whole grid and split up data
 ## load grid
 uk <- st_read('/data/notebooks/rstudio-setupconsthomas/DECIDE_constraintlayers/Data/raw_data/UK_grids/uk_map.shp')
@@ -59,61 +64,6 @@ plot(st_geometry(uk_grid), add = T, border = 'orange')
 
 all_rds <- list.files('Data/raw_data/OS_roadnetwork/data', pattern = 'Link.shp', full.names = T)
 all_rds
-
-## first go through each grid
-## this is going to have to read in every road shapfile for each grid - not the right way round to do it!!!!!
-for(g in 1:dim(uk_grid)[1]){
-  
-  print(paste(g, '/', dim(uk_grid)[1]))
-  
-  for(rds in 1:length(all_rds)) {
-    
-    rd_of_interest <- st_transform(st_read(all_rds[rds], quiet = T), crs = 27700)
-    
-    rd_int <- rd_of_interest[st_intersects(rd_of_interest, uk_grid[g,], sparse = F),]
-    
-    if(dim(rd_int)[1]==0){
-      
-      print('no road in grid')
-      
-      next
-      
-    } else if(dim(rd_int)[1]>0) {
-      
-      print('###   grid contains road   ###')
-      
-      ## check to see if any roads before it were also in same grid
-      prev_files_list <- list.files(paste0('Data/raw_data/OS_roadnetwork/gridded_link_road_10km/',
-                                           pattern =  paste0('_', g, '.shp')),
-                                    full.names = T)
-      
-      ## if there are then, combine them with the new files
-      if(dim(prev_files_list)[1]>0){ 
-        
-        print(paste('grid also contains other road grid =', g, 'road =', rds))
-        
-        # read them in 
-        prev_files <- st_read(prev_files_list, quiet = TRUE)
-        
-        # join them together
-        out_files <- rbind(prev_files, rd_int)
-        
-      } else if(dim(prev_files_list)[1]==0) { ## if not, rename roads of interest for output
-        
-        out_files <- rd_int
-        
-      }
-      
-      
-      st_write(out_files, dsn = paste0('Data/raw_data/OS_roadnetwork/data/gridded_link_road_10km/road_gridnumber_',g,'.shp'),
-               driver = "ESRI Shapefile", delete_layer = T)
-      
-    }
-    
-    
-  }
-  
-}
 
 
 ## For each road file go through all grids
@@ -168,15 +118,6 @@ for(rds in 1:length(all_rds)) {
     
   }
 }
-
-
-
-
-
-
-
-
-
 
 
 
