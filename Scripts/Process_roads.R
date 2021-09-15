@@ -68,14 +68,14 @@ all_rds
 
 ## For each road file go through all grids
 ## and split them into corresponding cells
-for(rds in 1:length(all_rds)) {
+for(rds in 42:length(all_rds)) {
   print(rds)
   
   rd_of_interest <- st_transform(st_read(all_rds[rds], quiet = T), crs = 27700)
   
   for(g in 1:dim(uk_grid)[1]){
     
-    print(paste(g, '/', dim(uk_grid)[1]))
+    if(g %in% seq(0,3025, by=50)) print(paste(g, '/', dim(uk_grid)[1]))
     
     rd_int <- rd_of_interest[st_intersects(rd_of_interest, uk_grid[g,], sparse = F),]
     
@@ -90,34 +90,47 @@ for(rds in 1:length(all_rds)) {
       print('###   grid contains road   ###')
       
       ## check to see if any roads before it were also in same grid
-      prev_files_list <- list.files(paste0('Data/raw_data/OS_roadnetwork/gridded_link_road_10km/',
-                                           pattern =  paste0('_', g, '.shp')),
+      prev_files_list <- list.files('Data/raw_data/OS_roadnetwork/data/gridded_link_road_10km',
+                                    pattern =  paste0('_', g, '.shp'),
                                     full.names = T)
       
       ## if there are then, combine them with the new files
       if(length(prev_files_list)>0){ 
         
-        print(paste('grid also contains other road grid =', g, 'road =', rds))
+        print(paste('###   grid also contains other road, grid =', g, 'road =', rds, '  ###'))
         
         # read them in 
-        prev_files <- st_read(prev_files_list, quiet = TRUE)
+        prev_files <- st_read(prev_files_list, quiet = TRUE) %>% 
+          rename(function. = function_)
         
         # join them together
-        out_files <- rbind(prev_files, rd_int)
+        out_files <- rbind(prev_files, st_zm(rd_int))
         
       } else if(length(prev_files_list)==0) { ## if not, rename roads of interest for output
         
-        out_files <- rd_int
+        out_files <- st_zm(rd_int)
         
       }
       
-      st_write(st_zm(out_files), dsn = paste0('Data/raw_data/OS_roadnetwork/data/gridded_link_road_10km/road_gridnumber_',g,'.shp'),
+      if(any(duplicated(out_files))) {
+        print('!!!   Removing duplicated files   !!!' )
+        out_files <- out_files[!duplicated(out_files),]
+      }
+      
+      
+      st_write(out_files, dsn = paste0('Data/raw_data/OS_roadnetwork/data/gridded_link_road_10km/road_gridnumber_',g,'.shp'),
                driver = "ESRI Shapefile", delete_layer = T)
       
     }
     
   }
 }
+
+
+
+### testing
+t <- st_read(paste0('Data/raw_data/OS_roadnetwork/data/gridded_link_road_10km/road_gridnumber_',150,'.shp'))
+plot(st_geometry(t))
 
 
 
