@@ -3,6 +3,8 @@ title: "Preprocessing access layers"
 output: html_document
 ---
 
+## About
+
 This R file creates a 100x100 'access score' raster layer that is loaded into the app to speed up nudge generation.
 
 It does it by working through 10km grid squares
@@ -21,6 +23,8 @@ library(leaflet)
 library(raster)
 library(rgdal)
 library(dplyr)
+library(htmlwidgets)
+
 ```
 
 Load UK 10k grids and 100x100 raster
@@ -30,25 +34,114 @@ uk_grid <- st_read('/data/data/DECIDE_constraintlayers/raw_data/UK_grids/uk_grid
 st_crs(uk_grid) <- 27700
 
 # sanity check that the grid squares look like the UK
-plot(st_geometry(uk_grid), add = F, col = 'orange')
+#plot(st_geometry(uk_grid), add = F, col = 'orange')
 
-uk_grid[1,]
-
-
-#
+# the big raster
 raster100 <- raster::stack('/data/data/DECIDE_constraintlayers/environmental_data/100mRastOneLayer.grd')
-plot(raster100)
+#plot(raster100)
+
+#get the CRS for when we project back to raster from data ramew
+raster_crs <- crs(raster100)
 
 raster100_df <- as.data.frame(raster100, xy=T, centroids=TRUE)[,1:2]
 
 ```
 
+Map layers
 
+Offline files
+
+Currently in use for pre-processing:
+ - CRow Act 2000
+ - OS greenspace
+ - RSPB reserve boundaries
+ - SSSI
+
+ - Greater London
+ - National trust
+ - rowmaps_footpath_bridleway
+ 
+Downloaded but not in use:
+ - OS roadnetwork
+ - Scotland
+ 
+OSM layers
+
+
+
+### Function for getting offline files for a 10km grid number
 
 ```{r}
 
+#base location
+base_location <- '/data/data/DECIDE_constraintlayers/raw_data/'
+
+#folders
+file_locations <- c(
+  'CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/',
+  'OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_greenspace_data_10km/',
+  #'SSSIs/gridded_data_10km/',
+  'greater-london-latest-free/london_gridded_data_10km/',
+  'rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/',
+  #'RSPB_Reserve_Boundaries/gridded_data_10km/',
+  'national_trust/gridded_data_10km/'
+)
+
+# function to get the data
+get_offline_gridded_data <- function(grid_number){
+  returned_files <- list()
+  
+  for (ii in 1:length(file_locations)){
+    file_location <- file_locations[ii]
+    all_grids <- list.files(paste0(base_location,file_location))
+    
+    right_file <- all_grids[grep(paste0("_",grid_number,".shp"), all_grids)]
+    
+    if (length(right_file)>0){
+      #build file path
+      file_path <- paste0(base_location,file_location,right_file)
+      
+      #load in file
+      file_shp <- st_read(file_path, quiet = TRUE) %>% st_transform(4326)
+      
+      #add it to the object that this function returns
+      returned_files[[length(returned_files)+1]] <- file_shp
+    }
+  }
+  #return the files
+  returned_files
+}
+
+
+#test <- get_offline_gridded_data(1500)
+
+
+
+```
+
+
+## Pre-processing
+
+run as jobs to use the 8 cores
+
+1:400
+401:800
+801:1200
+1201:1600
+1601:2000
+2001:2400
+2401:2800
+2801:3025
+
+```{r}
+#setting to F resolved some issues but 
+sf::sf_use_s2(T)
+
 #loop through all of the UK 10k grid squares
 for (i in 1:nrow(uk_grid)){
+  
+  print(paste0("grid number: ",i))
+  start.time <- Sys.time()
   
   ### Getting OSM data
   
@@ -79,10 +172,11 @@ for (i in 1:nrow(uk_grid)){
     add_osm_feature(key = 'railway', value = 'rail') %>%
     add_osm_feature(key = 'highway', value = 'motorway') %>%
     add_osm_feature(key = 'highway', value = 'trunk') %>%
-    # add_osm_feature(key = 'natural', value = 'water') %>%
+    add_osm_feature(key = 'natural', value = 'water') %>%
     # add_osm_feature(key = 'waterway', value = 'river') %>%
     add_osm_feature(key = 'landuse', value = 'landfill')
   
+  print("loading OSM data")
   #get OSM data
   q1$prefix <- q2$prefix <- "[out:xml][timeout:10000];\n(\n"
   good_features_data <- osmdata_sf(q1)
@@ -90,14 +184,10 @@ for (i in 1:nrow(uk_grid)){
   
   ### Getting PROW, Access land etc. data
   
-  crow <- st_read("/data/data/DECIDE_constraintlayers/raw_data/CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/access_land_gridnumber_1500.shp", quiet = TRUE) %>% st_transform(4326)
-  prow <- st_read("/data/data/DECIDE_constraintlayers/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/prow_gridnumber_1500.shp", quiet = TRUE) %>% st_transform(4326)
+  print("loading offline data")
+  offline_good_features_data <- get_offline_gridded_data(i)
   
-  
-  
-  
-  
-  
+
   # get the bounding box of the 10km grid square
   grid_bb <- st_bbox(this_10k_grid)
   
@@ -113,58 +203,90 @@ for (i in 1:nrow(uk_grid)){
   # make the raster df into a sd object using the projection but transform it to WGS84 for these operations
   raster_as_sf <- st_as_sf(raster_this_grid,coords = c("x", "y"),crs = projcrs) %>% st_transform(4326)
   
-  #see if the grid squares are within each of the good features
-  distance_check_good <- 
-    rowSums(st_is_within_distance(raster_as_sf,good_features_data$osm_lines,dist = 100,sparse = FALSE)) +
-    rowSums(st_is_within_distance(raster_as_sf,prow$geometry,dist = 100,sparse = FALSE)) +
-    rowSums(st_is_within_distance(raster_as_sf,crow$geometry,dist = 100,sparse = FALSE))
+  distance_check_bad <- rep(0,nrow(raster_this_grid))
+  distance_check_good <- rep(0,nrow(raster_this_grid))
   
-  # do the same for the bad features
-  distance_check_bad <- rowSums(st_is_within_distance(raster_as_sf,bad_features_data$osm_lines,dist = 50,sparse = FALSE)) + rowSums(st_is_within_distance(raster_as_sf,bad_features_data$osm_polygons,dist = 25,sparse = FALSE))
+  print("Checking distances of OSM data")
+  
+  #see if the grid squares are within each of the good features
+  if (!is.null(good_features_data$osm_lines)) {
+    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,good_features_data$osm_lines,dist = 175,sparse = FALSE))
+  }
+  
+  
+  print("Checking distances of offline data")
+  # do the same for all the good offline features
+  if (length(offline_good_features_data)>0){
+    for (ii in 1:length(offline_good_features_data)){
+      print(ii)
+      
+      #sometimes this would error and a fix was to turn off sphyical gemoetry so this trycatch turns it off if there's an error
+      tryCatch(
+        {
+        distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,offline_good_features_data[[ii]]$geometry,dist = 175,sparse = FALSE))
+        
+        }, error = function(cond){
+        sf::sf_use_s2(F)
+          distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,offline_good_features_data[[ii]]$geometry,dist = 175,sparse = FALSE))
+          sf::sf_use_s2(T)
+        }
+      )
+      
+    }
+  }
+  
+  print("Checking distances of bad OSM data")
+  # do the same for the OSM bad features
+  #polygons
+  if (!is.null(bad_features_data$osm_polygons)){
+    distance_check_bad <- distance_check_bad + rowSums(st_is_within_distance(raster_as_sf,bad_features_data$osm_polygons,dist = 25,sparse = FALSE))
+  }
+  
+  # lines
+  if (!is.null(bad_features_data$osm_lines)){
+    distance_check_bad <- distance_check_bad+  rowSums(st_is_within_distance(raster_as_sf,bad_features_data$osm_lines,dist = 50,sparse = FALSE))
+  }
   
   raster_as_sf$access <- distance_check_good
   raster_as_sf$no_go <- distance_check_bad
   
+  raster_as_sf$composite <- 0.5 # neutral
+  raster_as_sf$composite[raster_as_sf$access>0] <- 1
+  raster_as_sf$composite[raster_as_sf$no_go>0] <- 0
+  raster_as_sf$composite[raster_as_sf$no_go>0]
   
-  
+  print("Making map")
   # View this  on a leaflet map
   m <- leaflet() %>%
     addTiles() %>%
-    addPolylines(data=good_features_data$osm_line,opacity=1,weight=2) %>%
+    #addPolylines(data=good_features_data$osm_line,opacity=1,weight=2) %>%
     addPolygons(data=this_10k_gridWGS84,opacity=1,fillOpacity = 0,weight=2,color = "black") %>%
-    addCircles(data = raster_as_sf %>% filter(access>0),radius = 50,weight=0) %>%
-    addCircles(data = raster_as_sf %>% filter(no_go>0),radius = 50,weight=0,color = "red") %>%
-    addPolygons(data = crow$geometry) %>%
-    addPolylines(data = prow$geometry,opacity=1,weight=2)
+    addCircles(data = raster_as_sf %>% filter(composite==1),radius = 50,weight=0,color = "blue")
   
-  m
+  saveWidget(m, file=paste0("maps/access_map_grid_",i,".html"))
   
-
+  print("Saving data")
+  # add the reaster info
+  raster100_df[raster100_df$x > grid_bb$xmin & raster100_df$x < grid_bb$xmax & raster100_df$y > grid_bb$ymin & raster100_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
   
-  #loop through each of the 100x100m grid squares
+  raster100_to_save <- raster100_df[raster100_df$x > grid_bb$xmin & raster100_df$x < grid_bb$xmax & raster100_df$y > grid_bb$ymin & raster100_df$y < grid_bb$ymax,]
+  saveRDS(raster100_to_save,file = paste0("/data/data/DECIDE_constraintlayers/processed_data/access_raster_grid",i,".RDS"))
   
+  #save progress periodically
+  # if ((i %% 25) == 0){
+  #   saveRDS(raster100_df,file = "/data/data/DECIDE_constraintlayers/processed_data/access_raster.RDS")
+  # }
   
-  
-  
-  
-  
+  end.time <- Sys.time()
+  time.taken <- end.time - start.time
+  print(paste0("Time taken: ",time.taken))
 }
 
-
-
-
-
-
-
-
-
-
-
-# rebuild the raste
-rasterFromXYZ(r_df)
-
-
-
+if(F){
+  # rebuild the raster
+  raster100_with_access_info <- rasterFromXYZ(raster100_df,crs = raster_crs)
+  raster100_with_access_info$access
+}
 
 
 ```
@@ -172,6 +294,7 @@ rasterFromXYZ(r_df)
 
 
 
+## Finishing up and saving output
 
 
 
@@ -211,8 +334,7 @@ rasterFromXYZ(r_df)
 
 
 
-
-
+## Graveyard
 
 function to get bounding box +5km (approx)
 
@@ -309,4 +431,20 @@ m
 
 ```
 
+
+```{r}
+
+
+
+
+
+
+  
+  #CRoW
+  crow <- st_read(paste0("/data/data/DECIDE_constraintlayers/raw_data/CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/access_land_gridnumber_",i,".shp"), quiet = TRUE) %>% st_transform(4326)
+  
+  #OS greenspaces
+  
+  prow <- st_read(paste0("/data/data/DECIDE_constraintlayers/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/prow_gridnumber_",i,".shp"), quiet = TRUE) %>% st_transform(4326)
+```
 
