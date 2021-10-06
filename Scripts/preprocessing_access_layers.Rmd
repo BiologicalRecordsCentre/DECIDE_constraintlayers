@@ -1,0 +1,496 @@
+---
+title: "Preprocessing access layers"
+output: html_document
+---
+
+## About
+
+This R file creates a 100x100 'access score' raster layer that is loaded into the app to speed up nudge generation.
+
+It does it by working through 10km grid squares
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#load packages
+library(osmdata)
+library(sf)
+library(leaflet)
+library(raster)
+library(rgdal)
+library(dplyr)
+library(htmlwidgets)
+
+```
+
+Load UK 10k grids and 100x100 raster
+
+```{r}
+uk_grid <- st_read('/data/data/DECIDE_constraintlayers/raw_data/UK_grids/uk_grid_10km.shp')
+st_crs(uk_grid) <- 27700
+
+# sanity check that the grid squares look like the UK
+#plot(st_geometry(uk_grid), add = F, col = 'orange')
+
+# the big raster
+raster100 <- raster::stack('/data/data/DECIDE_constraintlayers/environmental_data/100mRastOneLayer.grd')
+#plot(raster100)
+
+#get the CRS for when we project back to raster from data ramew
+raster_crs <- crs(raster100)
+
+raster100_df <- as.data.frame(raster100, xy=T, centroids=TRUE)[,1:2]
+
+```
+
+Map layers
+
+Offline files
+
+Currently in use for pre-processing:
+ - CRow Act 2000
+ - OS greenspace
+ - RSPB reserve boundaries
+ - SSSI
+
+ - Greater London
+ - National trust
+ - rowmaps_footpath_bridleway
+ 
+Downloaded but not in use:
+ - OS roadnetwork
+ - Scotland
+ 
+OSM layers
+
+
+
+### Function for getting offline files for a 10km grid number
+
+```{r}
+
+#base location
+base_location <- '/data/data/DECIDE_constraintlayers/raw_data/'
+
+#folders
+file_locations <- c(
+  'CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/',
+  'OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_greenspace_data_10km/',
+  #'SSSIs/gridded_data_10km/',
+  'greater-london-latest-free/london_gridded_data_10km/',
+  'rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/',
+  #'RSPB_Reserve_Boundaries/gridded_data_10km/',
+  'national_trust/gridded_data_10km/'
+)
+
+# function to get the data
+get_offline_gridded_data <- function(grid_number){
+  returned_files <- list()
+  
+  for (ii in 1:length(file_locations)){
+    file_location <- file_locations[ii]
+    all_grids <- list.files(paste0(base_location,file_location))
+    
+    right_file <- all_grids[grep(paste0("_",grid_number,".shp"), all_grids)]
+    
+    if (length(right_file)>0){
+      #build file path
+      file_path <- paste0(base_location,file_location,right_file)
+      
+      #load in file
+      file_shp <- st_read(file_path, quiet = TRUE) %>% st_transform(4326)
+      
+      #add it to the object that this function returns
+      returned_files[[length(returned_files)+1]] <- file_shp
+    }
+  }
+  #return the files
+  returned_files
+}
+
+
+#test <- get_offline_gridded_data(1500)
+
+
+
+```
+
+
+## Pre-processing
+
+run as jobs to use the 8 cores
+
+1:400
+401:800
+801:1200
+1201:1600
+1601:2000
+2001:2400
+2401:2800
+2801:3025
+
+```{r}
+#setting to F resolved some issues but 
+sf::sf_use_s2(T)
+
+#loop through all of the UK 10k grid squares
+for (i in 1:nrow(uk_grid)){
+  #i <- runif(1,min = 0, max = nrow(uk_grid)) %>% round()
+  
+  print(paste0("grid number: ",i))
+  
+  start.time <- Sys.time()
+  
+  ### Getting OSM data
+  
+  #make the bounding box for the OSM query
+  this_10k_grid <- uk_grid[i,]$geometry #get the 10kgrid
+  this_10k_gridWGS84 <- st_transform(this_10k_grid, 4326) # convert to WGS84
+  
+  #where are we?
+  if(T){
+    m <- leaflet() %>%
+    addTiles() %>%
+    addPolygons(data=this_10k_gridWGS84,opacity=1,fillOpacity = 0,weight=2,color = "black")
+    m
+  }
+  
+  
+  # build the OSM query
+  q1 <- opq(bbox = this_10k_gridWGS84) %>%
+    #add_osm_feature(key = 'highway', value = 'footway') %>% #footways
+    add_osm_feature(key = 'designation', value = 'public_footpath') %>% #properly designated public footpaths, england and wales only
+    #add_osm_feature(key = 'highway', value = 'bridleway') %>% # bridleways
+    add_osm_feature(key = 'designation', value = 'public_bridleway') %>% #properly designated public footpaths, england and wales only
+    #add_osm_feature(key = 'highway', value = 'steps') %>% # steps (basically footpaths), probably not worth querying because usually such small features
+    #add_osm_feature(key = 'highway', value = 'path') %>% # generic paths
+    #add_osm_feature(key = 'highway', value = 'track') %>% # gravel tracks etc Excluded becase often private tracks are included
+    add_osm_feature(key = 'designation', value = 'byway_open_to_all_traffic') %>% 
+    add_osm_feature(key = 'designation', value = 'restricted_byway') %>% 
+    add_osm_feature(key = 'designation', value = 'access_land') %>% 
+    add_osm_feature(key = 'highway', value = 'residential') %>% # roads with housing so presumably will be accessible
+    add_osm_feature(key = 'highway', value = 'unclassified') %>% #really small roads roads (not actually 'unclassified')
+    add_osm_feature(key = 'highway', value = 'tertiary') %>% # roads smaller than b roads etc.
+    add_osm_feature(key = 'footway', value = 'sidewalk') %>% # pavements if classified separately to roads
+    add_osm_feature(key = 'sidewalk', value = 'both') %>% #roads with pavements 
+    add_osm_feature(key = 'sidewalk', value = 'left') %>% #roads with pavements
+    add_osm_feature(key = 'sidewalk', value = 'right') #roads with pavements
+  
+  #bad features
+  q2 <- opq(bbox = this_10k_gridWGS84) %>%
+    add_osm_feature(key = 'landuse', value = 'quarry') %>%
+    add_osm_feature(key = 'aeroway', value = 'aerodrome') %>%
+    add_osm_feature(key = 'railway', value = 'rail') %>%
+    add_osm_feature(key = 'highway', value = 'motorway') %>%
+    add_osm_feature(key = 'highway', value = 'trunk') %>%
+    add_osm_feature(key = 'landuse', value = 'landfill')
+  
+  #warning features
+  q3 <- opq(bbox = this_10k_gridWGS84) %>%
+    add_osm_feature(key = 'landuse', value = 'military')
+  
+  #water
+  q4 <- opq(bbox = this_10k_gridWGS84) %>% 
+    add_osm_feature(key = 'natural', value = 'water') %>%
+    add_osm_feature(key = 'waterway', value = 'river')
+  
+  print("loading OSM data")
+  #get OSM data
+  q1$prefix <- q2$prefix <- q3$prefix <- q4$prefix <- "[out:xml][timeout:10000];\n(\n"
+  good_features_data <- osmdata_sf(q1)
+  bad_features_data <- osmdata_sf(q2)
+  warning_features_data <- osmdata_sf(q3)
+  wet_features_data <- osmdata_sf(q4)
+  
+  ### Getting PROW, Access land etc. data
+  
+  print("loading offline data")
+  offline_good_features_data <- get_offline_gridded_data(i)
+  
+
+  # get the bounding box of the 10km grid square
+  grid_bb <- st_bbox(this_10k_grid)
+  
+  #only select the raster squares in the 10km grid square
+  raster_this_grid <- raster100_df %>% filter(x > grid_bb$xmin,
+                                              x < grid_bb$xmax,
+                                              y > grid_bb$ymin,
+                                              y < grid_bb$ymax)
+  
+  #get the easting and northing projection
+  projcrs <- crs(this_10k_grid)
+  
+  # make the raster df into a sd object using the projection but transform it to WGS84 for these operations
+  raster_as_sf <- st_as_sf(raster_this_grid,coords = c("x", "y"),crs = projcrs) %>% st_transform(4326)
+  
+  distance_check_bad <- distance_check_good <- distance_check_warning <- distance_check_water <- rep(0,nrow(raster_this_grid))
+  
+  print("Checking distances of OSM data")
+  
+  #see if the grid squares are within each of the good features
+  if (!is.null(good_features_data$osm_lines)) {
+    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,good_features_data$osm_lines,dist = 100,sparse = FALSE))
+  }
+  
+  
+  print("Checking distances of offline data")
+  # do the same for all the good offline features
+  if (length(offline_good_features_data)>0){
+    for (ii in 1:length(offline_good_features_data)){
+      print(ii)
+      
+      #sometimes this would error and a fix was to turn off sphyical gemoetry so this trycatch turns it off if there's an error
+      tryCatch(
+        {
+        distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,offline_good_features_data[[ii]]$geometry,dist = 100,sparse = FALSE))
+        
+        }, error = function(cond){
+        sf::sf_use_s2(F)
+          distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,offline_good_features_data[[ii]]$geometry,dist = 100,sparse = FALSE))
+          sf::sf_use_s2(T)
+        }
+      )
+      
+    }
+  }
+  
+  print("Checking distances of bad OSM data")
+  # do the same for the OSM bad, warning and water features
+  #polygons
+  if (!is.null(bad_features_data$osm_polygons)){
+    distance_check_bad <- distance_check_bad + rowSums(st_is_within_distance(raster_as_sf,bad_features_data$osm_polygons,dist = 25,sparse = FALSE))
+  }
+  
+  # lines
+  if (!is.null(bad_features_data$osm_lines)){
+    distance_check_bad <- distance_check_bad+  rowSums(st_is_within_distance(raster_as_sf,bad_features_data$osm_lines,dist = 50,sparse = FALSE))
+  }
+  
+  # warning features
+  if (!is.null(warning_features_data$osm_polygons)){
+    distance_check_warning <- distance_check_warning + rowSums(st_is_within_distance(raster_as_sf,warning_features_data$osm_polygons,dist = 25,sparse = FALSE))
+  }
+  
+  #water
+  if (!is.null(wet_features_data$osm_polygons)){
+    distance_check_water <- rowSums(st_is_within_distance(raster_as_sf,wet_features_data$osm_polygons,dist = 0,sparse = FALSE))
+    buffered_water_points <- raster_as_sf[distance_check_water>0,] %>% st_buffer(dist=40)
+    points_in_water <- st_contains(wet_features_data$osm_polygons,raster_as_sf_water) %>% unlist()
+    
+    distance_check_water[distance_check_water==1][points_in_water] <- 2
+    
+    distance_check_water <- distance_check_water-1
+  }
+  
+  raster_as_sf$access <- distance_check_good
+  raster_as_sf$no_go <- distance_check_bad
+  raster_as_sf$warning <- distance_check_warning
+  raster_as_sf$water <- distance_check_water
+  
+  raster_as_sf$composite <- 0.5 # neutral
+  raster_as_sf$composite[raster_as_sf$access>0] <- 1 #go
+  raster_as_sf$composite[raster_as_sf$warning>0] <- 0.75 # warning
+  raster_as_sf$composite[raster_as_sf$no_go>0] <- 0 #no go
+  raster_as_sf$composite[raster_as_sf$water>0] <- 0.25 #water
+
+  
+  print("Making map")
+  # View this  on a leaflet map
+  m <- leaflet() %>%
+    addTiles() %>%
+    #addPolylines(data=good_features_data$osm_line,opacity=1,weight=2) %>%
+    addPolygons(data=this_10k_gridWGS84,opacity=1,fillOpacity = 0,weight=2,color = "black") %>%
+    addCircles(data = raster_as_sf %>% filter(composite==1),radius = 50,weight=0,color = "blue") %>%
+    addCircles(data = raster_as_sf %>% filter(composite==0),radius = 50,weight=0,color = "red") %>%
+    addCircles(data = raster_as_sf %>% filter(composite==0.75),radius = 50,weight=0,color = "orange") %>%
+    addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "black",fillOpacity = 0.8)
+  
+  saveWidget(m, file=paste0("maps/access_map_grid_",i,".html"))
+  
+  print("Saving data")
+  # add the reaster info
+  raster100_df[raster100_df$x > grid_bb$xmin & raster100_df$x < grid_bb$xmax & raster100_df$y > grid_bb$ymin & raster100_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
+  
+  raster100_to_save <- raster100_df[raster100_df$x > grid_bb$xmin & raster100_df$x < grid_bb$xmax & raster100_df$y > grid_bb$ymin & raster100_df$y < grid_bb$ymax,]
+  saveRDS(raster100_to_save,file = paste0("/data/data/DECIDE_constraintlayers/processed_data/access_raster_grid",i,".RDS"))
+  
+  #save progress periodically
+  # if ((i %% 25) == 0){
+  #   saveRDS(raster100_df,file = "/data/data/DECIDE_constraintlayers/processed_data/access_raster.RDS")
+  # }
+  
+  end.time <- Sys.time()
+  time.taken <- end.time - start.time
+  print(paste0("Time taken: ",time.taken))
+}
+
+if(F){
+  # rebuild the raster
+  raster100_with_access_info <- rasterFromXYZ(raster100_df,crs = raster_crs)
+  raster100_with_access_info$access
+}
+
+
+```
+
+
+
+
+## Finishing up and saving output
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Graveyard
+
+function to get bounding box +5km (approx)
+
+```{r}
+
+get_bb_5km <- function(latitude,longitude){
+  
+  meters = 5000
+
+# // number of km per degree = ~111km (111.32 in google maps, but range varies
+#    between 110.567km at the equator and 111.699km at the poles)
+# // 1km in degree = 1 / 111.32km = 0.0089
+# // 1m in degree = 0.0089 / 1000 = 0.0000089
+  coef <- meters * 0.0000089
+
+  new_lat1 <- latitude - coef
+  new_lat2 <- latitude + coef
+  
+  #// pi / 180 = 0.018
+  new_long1 <- longitude - coef / cos(latitude * 0.018)
+  new_long2 <- longitude + coef / cos(latitude * 0.018)
+  
+  bb <- data.frame(min = c(new_long1,new_lat1), max = c(new_long2,new_lat2))
+
+  row.names(bb) <- c("x","y")
+  
+  bb %>% as.matrix()
+}
+
+test <- get_bb_5km(53.2,-1.5)
+
+test
+
+
+```
+
+```{r}
+
+# manually specify a bounding box
+# coordinates from https://gist.github.com/graydon/11198540
+#bb <- getbb ('Sheffield, UK')
+bb <- get_bb_5km(53.2,-1.5)
+
+#bb <- get_bb_5km(52.36553758871974, -1.4741498217780282)
+
+#might want to break these queries down a bit?
+
+# build a query for all sorts of accessible paths and roads
+q1 <- opq(bbox = bb) %>%
+  add_osm_feature(key = 'highway', value = 'footway') %>% #footways
+  add_osm_feature(key = 'highway', value = 'bridleway') %>% # bridleways
+  add_osm_feature(key = 'highway', value = 'steps') %>% # steps (basically footpaths)
+  add_osm_feature(key = 'highway', value = 'path') %>% # generic paths
+  #add_osm_feature(key = 'highway', value = 'track') %>% # gravel tracks etc - possibly private? MAYBE
+  add_osm_feature(key = 'highway', value = 'residential') %>% # roads with housing so presumably will be accessible
+  add_osm_feature(key = 'highway', value = 'unclassified') %>% #really small roads roads (not actually 'unclassified')
+  add_osm_feature(key = 'highway', value = 'tertiary') %>% # roads smaller than b roads etc.
+  add_osm_feature(key = 'highway', value = 'cycleway') %>% # some routes are only classified as cycle ways but they are probably accessible on foot - MAYBE
+  add_osm_feature(key = 'footway', value = 'sidewalk') %>% # pavements if classified separately to roads
+  add_osm_feature(key = 'sidewalk', value = 'both') %>% #roads with pavements 
+  add_osm_feature(key = 'sidewalk', value = 'left') %>% #roads with pavements
+  add_osm_feature(key = 'sidewalk', value = 'right') #roads with pavements
+
+q2 <- opq(bbox = bb) %>%
+  add_osm_feature(key = 'landuse', value = 'military') %>%
+  add_osm_feature(key = 'landuse', value = 'quarry') %>%
+  add_osm_feature(key = 'aeroway', value = 'aerodrome') %>%
+  add_osm_feature(key = 'railway', value = 'rail') %>%
+  add_osm_feature(key = 'highway', value = 'motorway') %>%
+  add_osm_feature(key = 'highway', value = 'trunk') %>%
+  # add_osm_feature(key = 'natural', value = 'water') %>%
+  # add_osm_feature(key = 'waterway', value = 'river') %>%
+  add_osm_feature(key = 'landuse', value = 'landfill')
+
+#change the timeout
+q1$prefix <- q2$prefix <- "[out:xml][timeout:10000];\n(\n"
+
+#do the queries
+good_features_data <- osmdata_sf(q1)
+bad_features_data <- osmdata_sf(q2)
+
+#buffered <- footway_data$osm_lines %>%
+#st_buffer(dist=100, endCapStyle="ROUND")
+
+# plot on a leaflet map
+m <- leaflet() %>%
+  addTiles() %>%
+  addPolylines(data=good_features_data$osm_line,opacity=1,weight=2) %>%
+  addPolygons(data=bad_features_data$osm_polygons,opacity=0.5,weight=2,color = "red") %>%
+  addPolylines(data=bad_features_data$osm_lines,opacity=1,weight=2,color = "red")
+
+m
+
+
+```
+
+
+```{r}
+
+
+
+
+
+
+  
+  #CRoW
+  crow <- st_read(paste0("/data/data/DECIDE_constraintlayers/raw_data/CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/access_land_gridnumber_",i,".shp"), quiet = TRUE) %>% st_transform(4326)
+  
+  #OS greenspaces
+  
+  prow <- st_read(paste0("/data/data/DECIDE_constraintlayers/raw_data/rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/prow_gridnumber_",i,".shp"), quiet = TRUE) %>% st_transform(4326)
+```
+
