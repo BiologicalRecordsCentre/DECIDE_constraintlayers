@@ -134,9 +134,11 @@ This loops through
 #setting to F resolved some issues but 
 sf::sf_use_s2(T)
 
+test_maps <- c(119,320,400,984,1082,1313,runif(100,min = 0, max = 2000) %>% round())
+test_maps <- c(runif(100,min = 0, max = 2000) %>% round())
+
 #loop through all of the UK 10k grid squares
-for (i in 1:nrow(uk_grid)){
-  i <- runif(1,min = 0, max = 2000) %>% round() #for testing by using random grid squares
+for (i in test_maps){
   
   print(paste0("grid number: ",i))
   
@@ -164,7 +166,7 @@ for (i in 1:nrow(uk_grid)){
     #add_osm_feature(key = 'highway', value = 'bridleway') %>% # bridleways
     add_osm_feature(key = 'designation', value = 'public_bridleway') %>% #properly designated public footpaths, england and wales only
     #add_osm_feature(key = 'highway', value = 'steps') %>% # steps (basically footpaths), probably not worth querying because usually such small features
-    #add_osm_feature(key = 'highway', value = 'path') %>% # generic paths
+    add_osm_feature(key = 'highway', value = 'path') %>% # generic paths
     #add_osm_feature(key = 'highway', value = 'track') %>% # gravel tracks etc Excluded becase often private tracks are included
     add_osm_feature(key = 'designation', value = 'byway_open_to_all_traffic') %>% 
     add_osm_feature(key = 'designation', value = 'restricted_byway') %>% 
@@ -286,12 +288,6 @@ for (i in 1:nrow(uk_grid)){
     distance_check_water[rownames(raster_as_sf) %in% rownames(buffered_water_points)[points_in_water>0]] <- 1
   }
   
-  leaflet() %>%
-    addTiles() %>%
-    addPolygons(data = wet_features_data$osm_polygons) %>%
-    addPolygons(data = buffered_water_points,label = rownames(buffered_water_points)) %>%
-    addMarkers(data = test)
-    
   raster_as_sf$access <- distance_check_good
   raster_as_sf$no_go <- distance_check_bad
   raster_as_sf$warning <- distance_check_warning
@@ -344,4 +340,4 @@ if(F){
 
 ```
 
-
+ 

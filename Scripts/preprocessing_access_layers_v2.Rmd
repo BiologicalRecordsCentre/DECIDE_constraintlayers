@@ -1,0 +1,133 @@
+---
+title: "Preproccessing access layers v2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## About
+
+This is a second version of the pre-processing access layers script
+
+see: https://github.com/BiologicalRecordsCentre/DECIDE-app/issues/141 for discussion
+
+
+
+```{r}
+library(osmextract)
+library(sf)
+```
+
+```{r}
+
+uk_grid <- st_read('/data/data/DECIDE_constraintlayers/raw_data/UK_grids/uk_grid_10km.shp')
+st_crs(uk_grid) <- 27700
+
+this_10k_grid <- uk_grid[1020,]$geometry #get the 10kgrid
+this_10k_gridWGS84 <- st_transform(this_10k_grid, 4326) # convert to WGS84
+
+
+```
+
+
+Load in the OSM data
+
+```{r}
+
+#access lines
+q1 <- "
+SELECT * FROM 'lines' WHERE 
+designation = 'public_footpath' 
+OR designation = 'public_bridleway'
+OR designation = 'byway_open_to_all_traffic' 
+OR designation = 'restricted_byway' 
+OR designation = 'public_bridleway' 
+OR highway = 'footway' 
+OR highway = 'path'
+OR highway = 'residential' 
+OR highway = 'unclassified'
+OR highway = 'tertiary' 
+OR footway = 'sidewalk'
+OR sidewalk = 'both'
+OR sidewalk = 'left'
+OR sidewalk = 'right'
+"
+
+q1 <- "
+SELECT * FROM 'lines' WHERE 
+highway = 'footway' 
+OR highway = 'path'
+OR highway = 'residential' 
+OR highway = 'unclassified'
+OR highway = 'tertiary' 
+"
+
+#access polygons
+q2 <- "
+SELECT * FROM 'lines' WHERE 
+designation = 'access_land'
+
+"
+
+```
+
+
+```{r}
+
+box <- st_bbox(this_10k_gridWGS84)
+
+oe_get(place = box,
+       query = q1,
+       extra_tags = c("designation","footway","sidewalk")
+       )
+
+oe_vectortranslate("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.osm.pbf",
+                   layer="lines",
+                   force_vectortranslate =T,
+                   extra_tags = c("designation","footway","sidewalk")
+                   )
+
+
+# test <- oe_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.osm.pbf",
+#                 extra_tags = "designation",
+#                 query = q3)
+
+test <- oe_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.gpkg",
+                extra_tags = c("designation","footway","sidewalk"),
+                query = q1,
+                boundary = this_10k_gridWGS84,
+                boundary_type = "clipsrc",
+                skip_vectortranslate = T)
+
+test2 <- oe_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.gpkg")
+
+
+
+plot(test["highway"])
+
+
+#oe_get_network(this_10k_gridWGS84, mode = "walking", download_directory = "/data/data/DECIDE_constraintlayers/raw_data/OSM")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
