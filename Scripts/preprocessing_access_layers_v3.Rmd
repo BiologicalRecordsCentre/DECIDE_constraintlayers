@@ -1,0 +1,329 @@
+---
+title: "Preproccessing access layers v3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+#load packages
+library(osmdata) #for using overpass API
+library(sf)
+library(leaflet) # for making maps for sanity checking
+library(raster)
+library(rgdal)
+library(dplyr)
+library(htmlwidgets)
+
+```
+
+## Data preparation
+
+### Downloading and processing OSM data into GeoPackage format
+
+```{r}
+#set the extent of the area to get data from (use a geofabrik region name)
+download_area <- "Great Britain"
+#download_area <- "North Yorkshire" # use a smaller area for testing
+
+#Access lines
+vt_opts_1 = c(
+    "-select", "osm_id, highway, designation, footway, sidewalk",
+    "-where", "highway IN ('footway', 'path', 'residential','unclassified','tertiary','sidewalk') OR designation IN ('public_footpath','byway_open_to_all_traffic','restricted_byway','public_bridleway','access_land') OR footway = 'sidewalk' OR sidewalk IN ('both','left','right')"
+  )
+
+oe_get(
+  download_area,
+  layer = "lines",
+  provider = "geofabrik",
+  match_by = "name",
+  max_string_dist = 1,
+  level = NULL,
+  download_directory = "/data/data/DECIDE_constraintlayers/raw_data/OSM",
+  force_download = F,
+  vectortranslate_options = vt_opts_1,
+  extra_tags = c("designation","footway","sidewalk"),
+  force_vectortranslate = T,
+  quiet = FALSE
+) %>% st_write("/data/data/DECIDE_constraintlayers/raw_data/OSM/access_lines.gpkg",delete_layer = T)
+
+
+# No-go lines
+vt_opts_2 <- c(
+    "-select", "osm_id, highway, railway",
+    "-where", "highway IN ('motorway','trunk') OR railway = 'rail'"
+  )
+
+oe_get(
+  download_area,
+  layer = "lines",
+  provider = "geofabrik",
+  match_by = "name",
+  max_string_dist = 1,
+  level = NULL,
+  download_directory = "/data/data/DECIDE_constraintlayers/raw_data/OSM",
+  force_download = F,
+  vectortranslate_options = vt_opts_2,
+  extra_tags = c("railway"),
+  force_vectortranslate = T,
+  quiet = FALSE
+) %>% st_write("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_lines.gpkg",delete_layer = T)
+
+
+#no go areas
+vt_opts_3 <- c(
+    "-select", "osm_id, landuse, aeroway",
+    "-where", "landuse IN ('quarry','landfill','industrial','military') OR aeroway = 'aerodrome'"
+  )
+
+oe_get(
+  download_area,
+  layer = "multipolygons",
+  provider = "geofabrik",
+  max_string_dist = 1,
+  level = NULL,
+  download_directory = "/data/data/DECIDE_constraintlayers/raw_data/OSM",
+  force_download = F,
+  vectortranslate_options = vt_opts_3,
+  force_vectortranslate = T,
+  quiet = FALSE
+) %>% st_write("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_areas.gpkg",delete_layer = T)
+
+
+# water areas
+vt_opts_4 <- c(
+    "-select", "osm_id, natural",
+    "-where", "natural = 'water'"
+  )
+
+oe_get(
+  download_area,
+  layer = "multipolygons",
+  provider = "geofabrik",
+  max_string_dist = 1,
+  level = NULL,
+  download_directory = "/data/data/DECIDE_constraintlayers/raw_data/OSM",
+  force_download = F,
+  vectortranslate_options = vt_opts_4,
+  force_vectortranslate = T,
+  quiet = FALSE
+) %>% st_write("/data/data/DECIDE_constraintlayers/raw_data/OSM/water_areas.gpkg",delete_layer = T)
+
+```
+
+Demonstration of accessing the processed OSM data
+
+```{r}
+
+uk_grid <- st_read('/data/data/DECIDE_constraintlayers/raw_data/UK_grids/uk_grid_10km.shp')
+st_crs(uk_grid) <- 27700
+this_10k_grid <- uk_grid[1,]$geometry #get the 10kgrid
+this_10k_gridWGS84 <- st_transform(this_10k_grid, 4326) %>% st_as_text()# convert to WGS84
+
+layer1 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/access_lines.gpkg",
+                        wkt_filter = this_10k_gridWGS84
+                        )
+
+layer2 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_lines.gpkg",
+                        wkt_filter = this_10k_gridWGS84
+                        )
+
+layer3 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_areas.gpkg",
+                        wkt_filter = this_10k_gridWGS84
+                        )
+
+
+layer4 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/water_areas.gpkg",
+                        wkt_filter = this_10k_gridWGS84
+                        )
+
+m <- leaflet() %>%
+  addTiles() %>%
+  addPolylines(data = layer1,weight = 1) %>%
+  addPolylines(data = layer2,weight = 1,color = "red") %>%
+  addPolygons(data = layer3,weight = 1,fillColor ="red") %>%
+  addPolygons(data = layer4,weight = 1) %>%
+  addPolygons(data=this_10k_grid %>% st_transform(4326) ,opacity=1,fillOpacity = 0,weight=2,color = "black")
+  
+m
+
+```
+
+
+### Accessing offline data sources
+
+Function for getting offline files for a 10km grid number
+
+```{r}
+#base location
+base_location <- '/data/data/DECIDE_constraintlayers/raw_data/'
+
+#folders
+file_locations <- c(
+  'CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/',
+  'OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_greenspace_data_10km/',
+  #'SSSIs/gridded_data_10km/',
+  'greater-london-latest-free/london_gridded_data_10km/',
+  'rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/',
+  #'RSPB_Reserve_Boundaries/gridded_data_10km/',
+  'national_trust/gridded_data_10km/'
+)
+
+# function to get the data
+get_offline_gridded_data <- function(grid_number){
+  returned_files <- list()
+  
+  for (ii in 1:length(file_locations)){
+    file_location <- file_locations[ii]
+    all_grids <- list.files(paste0(base_location,file_location))
+    
+    right_file <- all_grids[grep(paste0("_",grid_number,".shp"), all_grids)]
+    
+    if (length(right_file)>0){
+      #build file path
+      file_path <- paste0(base_location,file_location,right_file)
+      
+      #load in file
+      file_shp <- st_read(file_path, quiet = TRUE) %>% st_transform(4326)
+      
+      #add it to the object that this function returns
+      returned_files[[length(returned_files)+1]] <- file_shp
+    }
+  }
+  #return the files
+  returned_files
+}
+
+#test <- get_offline_gridded_data(1500)
+```
+
+
+
+## Data processing
+
+Function that takes
+
+Grid
+loaded in gpkg file
+raster
+
+Set up to be able to be run as jobs
+
+```{r}
+sf::sf_use_s2(T)
+
+#load in required to do the job
+
+uk_grid <- st_read('/data/data/DECIDE_constraintlayers/raw_data/UK_grids/uk_grid_10km.shp')
+st_crs(uk_grid) <- 27700
+
+# the big raster
+raster100 <- raster::stack('/data/data/DECIDE_constraintlayers/environmental_data/100mRastOneLayer.grd')
+#plot(raster100)
+#get the CRS for when we project back to raster from data ramew
+raster_crs <- st_crs(raster100)
+raster100_df <- as.data.frame(raster100, xy=T, centroids=TRUE)[,1:2]
+
+#define the function for assessing accessibility
+assess_accessibility <- function(grid_number,grids,raster_df){
+  
+  #load 10k grid
+  this_10k_grid <- grids[grid_number,]$geometry #get the 10kgrid
+  this_10k_gridWGS84 <- st_transform(this_10k_grid, 4326) # convert to WGS84
+  grid_bb <- st_bbox(this_10k_grid)
+  
+  #get the centroids of the the 100m grids within the 10k grid
+  raster_this_grid <- raster100_df %>% filter(x > grid_bb$xmin,
+                                              x < grid_bb$xmax,
+                                              y > grid_bb$ymin,
+                                              y < grid_bb$ymax)
+  
+  #get the easting and northing projection
+  projcrs <- crs(this_10k_grid)
+  
+  # make the raster df into a sd object using the projection but transform it to WGS84 for these operations
+  raster_as_sf <- st_as_sf(raster_this_grid,coords = c("x", "y"),crs = projcrs) %>% st_transform(4326)
+  
+  # load OSM data
+  osm_layer1 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/access_lines.gpkg",
+                        wkt_filter = this_10k_gridWGS84 %>% st_as_text(),
+                        quiet = T
+                        )
+
+  osm_layer2 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_lines.gpkg",
+                        wkt_filter = this_10k_gridWGS84 %>% st_as_text(),
+                        quiet = T
+                        )
+
+  osm_layer3_no_go <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_areas.gpkg",
+                        wkt_filter = this_10k_gridWGS84 %>% st_as_text(),
+                        quiet = T
+                        ) %>% filter(landuse != "military")
+  
+  osm_layer3_warn <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_areas.gpkg",
+                        wkt_filter = this_10k_gridWGS84 %>% st_as_text(),
+                        quiet = T
+                        ) %>% filter(landuse == "military")
+
+  osm_layer4 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/water_areas.gpkg",
+                        wkt_filter = this_10k_gridWGS84 %>% st_as_text(),
+                        quiet = T
+                        )
+  
+  
+  # Load offline data
+  offline_good_features_data <- get_offline_gridded_data(grid_number)
+  
+  
+  #vectors for filling with info
+  distance_check_bad <- distance_check_good <- distance_check_warning <- distance_check_water <- rep(0,nrow(raster_this_grid))
+  
+  
+  #check good data
+  print("Checking distances of offline data")
+  # do the same for all the good offline features
+  if (length(offline_good_features_data)>0){
+    for (ii in 1:length(offline_good_features_data)){
+      print(ii)
+      
+      #sometimes this would error and a fix was to turn off spherical geometry so this trycatch turns it off if there's an error
+      tryCatch(
+        {
+        distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,offline_good_features_data[[ii]]$geometry,dist = 100,sparse = FALSE))
+        
+        }, error = function(cond){
+        sf::sf_use_s2(F)
+          distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,offline_good_features_data[[ii]]$geometry,dist = 100,sparse = FALSE))
+          sf::sf_use_s2(T)
+        }
+      )
+      
+    }
+  }
+  
+  distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1,dist = 100,sparse = FALSE))
+  
+  distance_check_bad <- distance_check_bad + rowSums(st_is_within_distance(raster_as_sf,osm_layer2,dist = 50,sparse = FALSE)) + rowSums(st_is_within_distance(raster_as_sf,osm_layer3_no_go,dist = 25,sparse = FALSE))
+  
+  distance_check_warning <- distance_check_warning + rowSums(st_is_within_distance(raster_as_sf,osm_layer3_warn,dist = 25,sparse = FALSE))
+  
+  distance_check_water <- distance_check_warning + rowSums(st_is_within_distance(raster_as_sf,osm_layer4,dist = 0,sparse = FALSE))
+}
+
+
+#test
+system.time({assess_accessibility(1,uk_grid,raster100_df)})
+
+
+
+```
+
+
+
+
+
+

@@ -21,6 +21,8 @@ library(sf)
 library(rgdal)
 library(raster)
 library(dplyr)
+
+library(leaflet)
 ```
 
 ```{r load_grids}
@@ -35,6 +37,10 @@ raster100 <- raster::stack('/data/data/DECIDE_constraintlayers/environmental_dat
 raster_crs <- st_crs(raster100)
 raster100_df <- as.data.frame(raster100, xy=T, centroids=TRUE)[,1:2]
 ```
+
+
+
+
 
 ### Function for getting offline files for a 10km grid number
 
@@ -88,7 +94,6 @@ Vector translate operations - run once
 Essentially this decompresses from the `.psm.pbf` file that we downloaded from geofabrik and by specifying extra tags that we can then SQL query. 
 
 ```{r}
-
 #Define the vectortranslate options (see https://docs.ropensci.org/osmextract/articles/osmextract.html)
 
 if(F){
@@ -110,47 +115,73 @@ if(F){
   file.rename("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.gpkg",
               "/data/data/DECIDE_constraintlayers/raw_data/OSM/access_layers.gpkg")
   
-  
-  # access_polys
-  vectortranslate_opts_access_polys = c(
-    "-select", "osm_id, highway, designation, footway, sidewalk",
-    "-where", "highway IN ('footway', 'path', 'residential','unclassified','tertiary','sidewalk') OR designation IN ('public_footpath','byway_open_to_all_traffic','restricted_byway','public_bridleway','access_land') OR footway = 'sidewalk' OR sidewalk IN ('both','left','right')"
-  )
-  
-  
   #NO GO AND WARNING AREAS
-  #bad features (highway, landuse, aeroway,railway)
+  #bad features lines (highway, landuse, aeroway,railway)
   vectortranslate_opts_avoid = c(
-    # SQL-like query where we select only the features where highway in (primary, secondary, tertiary)
-    "-select", "osm_id, highway, landuse, aeroway, railway",
-    "-where", "highway IN ('motorway','trunk') OR landuse IN ('quarry','landfill','industrial','military') OR aeroway = 'aerodrome' OR railway = 'rail'"
+    "-select", "osm_id, highway, railway",
+    "-where", "highway IN ('motorway','trunk') OR railway = 'rail'"
   )
   
   oe_vectortranslate("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.osm.pbf",
                      force_vectortranslate =T,
-                     extra_tags = c("landuse", "aeroway","railway"),
+                     extra_tags = c("railway"),
                      vectortranslate_options = vectortranslate_opts_avoid
                      )
   
   file.rename("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.gpkg",
-              "/data/data/DECIDE_constraintlayers/raw_data/OSM/avoid_layers.gpkg")
+              "/data/data/DECIDE_constraintlayers/raw_data/OSM/avoid_layers_lines.gpkg")
   
   
-  
-  # WATER AREAS
-  vectortranslate_opts_water = c(
-    "-select", "osm_id, natural, waterway",
-    "-where", "natural = 'water' OR waterway = 'river'"
+  #bad features areas(highway, landuse, aeroway,railway)
+  vectortranslate_opts_avoid = c(
+    "-select", "osm_id, landuse, aeroway",
+    "-where", "landuse IN ('quarry','landfill','industrial','military') OR aeroway = 'aerodrome'"
   )
   
   oe_vectortranslate("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.osm.pbf",
                      force_vectortranslate =T,
-                     extra_tags = c("natural","waterway"),
-                     vectortranslate_options = vectortranslate_opts_water,
-                     layer = 'multilinestrings'
+                     extra_tags = c("landuse", "aeroway"),
+                     vectortranslate_options = vectortranslate_opts_avoid,
+                     layer="multipolygons"
                      )
   
+  #rename the file
   file.rename("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.gpkg",
+              "/data/data/DECIDE_constraintlayers/raw_data/OSM/avoid_layers_area.gpkg")
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  # gdal_utils(
+  #   util = "vectortranslate",
+  #   source = "/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.osm.pbf",
+  #   destination = "/data/data/DECIDE_constraintlayers/raw_data/OSM/water_layers.gpkg",
+  #   options = c(
+  #     "-f", "GPKG", # output file format for GDAL < 2.3
+  #     "-overwrite"
+  #   ),
+  #   quiet = F
+  # )
+  
+  
+  # WATER AREAS
+  vectortranslate_opts_water = c(
+    "-select", "osm_id, natural",
+    "-where", "natural = 'water'"
+  )
+  
+  oe_vectortranslate("/data/data/DECIDE_constraintlayers/raw_data/OSM/great-britain-latest.osm.pbf",
+                     force_vectortranslate =T,
+                     vectortranslate_options = vectortranslate_opts_water,
+                     layer = 'multipolygons'
+                     )
+  
+  file.rename("/data/data/DECIDE_constraintlayers/raw_data/OSM/geofabrik_south-yorkshire-latest.gpkg",
               "/data/data/DECIDE_constraintlayers/raw_data/OSM/water_layers.gpkg")
 
 
@@ -180,7 +211,7 @@ OR sidewalk = 'right'
 
 #access polygons
 q2 <- "
-SELECT * FROM 'points' WHERE
+SELECT * FROM 'lines' WHERE
 designation = 'access_land'
 "
 
@@ -195,18 +226,17 @@ highway = 'trunk'
 
 # no go, warning polys 
 q4 <- "
-SELECT * FROM 'polygon' WHERE
-landuse = 'military' OR
-aeroway = 'aerodrome' OR
-landuse = 'quarry' OR
-landuse = 'landfill'
+SELECT * FROM 'multipolygons' WHERE
+landuse2 = 'military' OR
+aeroway2 = 'aerodrome' OR
+landuse2 = 'quarry' OR
+landuse2 = 'landfill'
 "
 
 # water polys
 q5 <- "
 SELECT * FROM 'polygons' WHERE
-natural = 'water' OR
-waterway = 'river'
+natural = 'water'
 "
 
 
@@ -223,20 +253,27 @@ this_10k_gridWGS84 <- st_transform(this_10k_grid, 4326) %>% st_as_text()# conver
 #
 access_lines <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/access_layers.gpkg",
                         layer = "lines",
-                        wkt_filter = this_10k_gridWGS84
-                        )
-
-access_poly <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/access_layers.gpkg", 
                         query = q2,
                         wkt_filter = this_10k_gridWGS84
                         )
 
+plot(access_lines)
 
+
+
+#lines to avoid (motorways, railways)
 avoid_lines <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/avoid_layers.gpkg", 
                         query = q3,
                         wkt_filter = this_10k_gridWGS84
                         )
 
+#areas to avoid or warn (military, landfill, industrial)
+avoid_poly <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/avoid_layers_area.gpkg",
+                        #wkt_filter = this_10k_gridWGS84#,
+                        #query = q4
+                      )
+
+#water areas
 water_poly <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/water_layers.gpkg")
 
 
@@ -247,6 +284,29 @@ access_lines %>% filter(highway == "trunk")
 access_lines$highway %>% unique()
 
 plot(access_lines,max.plot = 12)
+
+
+
+
+m <- leaflet() %>%
+    addTiles() %>%
+    addPolylines(data=avoid_poly$geometry)
+m
+
+
+areas <- osmextract::oe_get(
+  place = "South Yorkshire", 
+  layer = "multipolygons", 
+  query = "SELECT * FROM multipolygons WHERE natural = 'water'", 
+  quiet = FALSE,
+  force_download = T,
+  force_vectortranslate = T
+)
+
+areas
+
+
+
 
 ```
 
