@@ -1,38 +1,4 @@
----
-title: "Preproccessing access layers v3"
-output: html_document
----
-
-```{r setup, include=FALSE, purl=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-Convert R markdown chunks into R script for running local jobs
-
-```{r, purl=FALSE}
-for (i in 1:8){
-  knitr::purl("Scripts/preprocessing_access_layers_v3.Rmd",output = paste0( "Scripts/preproc_jobs/preprocessing_access_layers_job",i,".R"))
-  
-  lines <- readLines(paste0("Scripts/preproc_jobs/preprocessing_access_layers_job",i,".R"))
-  lines[1] <- paste("job_id <-",i)
-  
-  write(lines,file=paste0("Scripts/preproc_jobs/preprocessing_access_layers_job",i,".R"))
-}
-```
-
-Convert R markdown chunks into R script that runs for one file (for JASMIN)
-
-```{r, purl=FALSE}
-knitr::purl("Scripts/preprocessing_access_layers_v3.Rmd",output = "Scripts/preproc_jobs/preprocessing_access_layers_job_slurm.R")
-
-lines <- readLines("Scripts/preproc_jobs/preprocessing_access_layers_job_slurm.R")
-lines[1] <- 'args = commandArgs(trailingOnly=TRUE); slurm_grid_id <- args[1]'
-
-write(lines,file="Scripts/preproc_jobs/preprocessing_access_layers_job_slurm.R")
-
-```
-
-```{r load_packages}
+job_id <- 1
 setwd("/data/notebooks/rstudio-conlayersimon/DECIDE_constraintlayers/Scripts")
 
 #THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT
@@ -45,148 +11,13 @@ library(rgdal)
 library(dplyr)
 library(htmlwidgets)
 
-```
-
-## Data preparation
-
-### Downloading and processing OSM data into GeoPackage format
-
-```{r data_prep, purl=FALSE}
 
 
-#set the extent of the area to get data from (use a geofabrik region name)
-download_area <- "Great Britain"
-#download_area <- "North Yorkshire" # use a smaller area for testing
-
-#Access lines
-vt_opts_1 = c(
-    "-select", "osm_id, highway, designation, footway, sidewalk",
-    "-where", "highway IN ('footway', 'path', 'residential','unclassified','tertiary','sidewalk') OR designation IN ('public_footpath','byway_open_to_all_traffic','restricted_byway','public_bridleway','access_land') OR footway = 'sidewalk' OR sidewalk IN ('both','left','right')"
-  )
-
-oe_get(
-  download_area,
-  layer = "lines",
-  provider = "geofabrik",
-  match_by = "name",
-  max_string_dist = 1,
-  level = NULL,
-  download_directory = "/data/data/DECIDE_constraintlayers/raw_data/OSM",
-  force_download = F,
-  vectortranslate_options = vt_opts_1,
-  extra_tags = c("designation","footway","sidewalk"),
-  force_vectortranslate = T,
-  quiet = FALSE
-) %>% st_write("/data/data/DECIDE_constraintlayers/raw_data/OSM/access_lines.gpkg",delete_layer = T)
 
 
-# No-go lines
-vt_opts_2 <- c(
-    "-select", "osm_id, highway, railway",
-    "-where", "highway IN ('motorway','trunk') OR railway = 'rail'"
-  )
-
-oe_get(
-  download_area,
-  layer = "lines",
-  provider = "geofabrik",
-  match_by = "name",
-  max_string_dist = 1,
-  level = NULL,
-  download_directory = "/data/data/DECIDE_constraintlayers/raw_data/OSM",
-  force_download = F,
-  vectortranslate_options = vt_opts_2,
-  extra_tags = c("railway"),
-  force_vectortranslate = T,
-  quiet = FALSE
-) %>% st_write("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_lines.gpkg",delete_layer = T)
 
 
-#no go areas
-vt_opts_3 <- c(
-    "-select", "osm_id, landuse, aeroway",
-    "-where", "landuse IN ('quarry','landfill','industrial','military') OR aeroway = 'aerodrome'"
-  )
-
-oe_get(
-  download_area,
-  layer = "multipolygons",
-  provider = "geofabrik",
-  max_string_dist = 1,
-  level = NULL,
-  download_directory = "/data/data/DECIDE_constraintlayers/raw_data/OSM",
-  force_download = F,
-  vectortranslate_options = vt_opts_3,
-  force_vectortranslate = T,
-  quiet = FALSE
-) %>% st_write("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_areas.gpkg",delete_layer = T)
-
-
-# water areas
-vt_opts_4 <- c(
-    "-select", "osm_id, natural",
-    "-where", "natural = 'water'"
-  )
-
-oe_get(
-  download_area,
-  layer = "multipolygons",
-  provider = "geofabrik",
-  max_string_dist = 1,
-  level = NULL,
-  download_directory = "/data/data/DECIDE_constraintlayers/raw_data/OSM",
-  force_download = F,
-  vectortranslate_options = vt_opts_4,
-  force_vectortranslate = T,
-  quiet = FALSE
-) %>% st_write("/data/data/DECIDE_constraintlayers/raw_data/OSM/water_areas.gpkg",delete_layer = T)
-
-```
-
-Demonstration of accessing the processed OSM data
-
-```{r data_demo, purl=FALSE}
-
-uk_grid <- st_read('/data/data/DECIDE_constraintlayers/raw_data/UK_grids/uk_grid_10km.shp')
-st_crs(uk_grid) <- 27700
-this_10k_grid <- uk_grid[1,]$geometry #get the 10kgrid
-this_10k_gridWGS84 <- st_transform(this_10k_grid, 4326) %>% st_as_text()# convert to WGS84
-
-layer1 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/access_lines.gpkg",
-                        wkt_filter = this_10k_gridWGS84
-                        )
-
-layer2 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_lines.gpkg",
-                        wkt_filter = this_10k_gridWGS84
-                        )
-
-layer3 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_areas.gpkg",
-                        wkt_filter = this_10k_gridWGS84
-                        )
-
-
-layer4 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/water_areas.gpkg",
-                        wkt_filter = this_10k_gridWGS84
-                        )
-
-m <- leaflet() %>%
-  addTiles() %>%
-  addPolylines(data = layer1,weight = 1) %>%
-  addPolylines(data = layer2,weight = 1,color = "red") %>%
-  addPolygons(data = layer3,weight = 1,fillColor ="red") %>%
-  addPolygons(data = layer4,weight = 1) %>%
-  addPolygons(data=this_10k_grid %>% st_transform(4326) ,opacity=1,fillOpacity = 0,weight=2,color = "black")
-  
-m
-
-```
-
-
-### Accessing offline data sources
-
-Function for getting offline files for a 10km grid number
-
-```{r access_offline_data}
+## ----access_offline_data---------------------------------------------------------------------------------
 #base location
 base_location <- '/data/data/DECIDE_constraintlayers/raw_data/'
 
@@ -236,21 +67,9 @@ check_access_lapply <- function(...){
 # test2 <- lapply(test,check_access_lapply,x = raster_as_sf,dist = 100,sparse = FALSE) %>% Reduce(f='+')
 
 
-```
 
 
-
-## Data processing
-
-Function that takes
-
-Grid
-loaded in gpkg file
-raster
-
-Set up to be able to be run as jobs
-
-```{r data_processing}
+## ----data_processing-------------------------------------------------------------------------------------
 sf::sf_use_s2(T)
 
 #load in required to do the job
@@ -428,11 +247,9 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
 
 
 
-```
 
-Execture as a rstudio job (one of 8)
 
-```{r rstudio_job}
+## ----rstudio_job-----------------------------------------------------------------------------------------
 if(exist(job_id)){
   #set it all off as 8 seperate jobs, saving the individual 10k grids
   log_df <- data.frame(grid_no = 0,time_taken = "",time = "")[-1,]
@@ -452,11 +269,9 @@ if(exist(job_id)){
   }
 }
 
-```
 
-Slurm script
 
-```{r}
+## --------------------------------------------------------------------------------------------------------
 
 if(exist(slurm_grid_id)){
   
@@ -468,11 +283,6 @@ if(exist(slurm_grid_id)){
   
   print(time_taken)
 }
-
-
-```
-
-
 
 
 
