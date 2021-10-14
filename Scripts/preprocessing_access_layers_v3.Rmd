@@ -329,13 +329,13 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   grid_bb <- st_bbox(this_10k_grid)
   
   #get the centroids of the the 100m grids within the 10k grid
-  raster_this_grid <- raster100_df %>% filter(x > grid_bb$xmin,
+  raster_this_grid <- raster_df %>% filter(x > grid_bb$xmin,
                                               x < grid_bb$xmax,
                                               y > grid_bb$ymin,
                                               y < grid_bb$ymax)
   
   #get the easting and northing projection
-  projcrs <- crs(this_10k_grid)
+  projcrs <- st_crs(this_10k_grid)
   
   # make the raster df into a sd object using the projection but transform it to WGS84 for these operations
   raster_as_sf <- st_as_sf(raster_this_grid,coords = c("x", "y"),crs = projcrs) %>% st_transform(4326)
@@ -461,9 +461,9 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   }
   
   
-  raster100_df[raster100_df$x > grid_bb$xmin & raster100_df$x < grid_bb$xmax & raster100_df$y > grid_bb$ymin & raster100_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
+  raster_df[raster_df$x > grid_bb$xmin & raster_df$x < grid_bb$xmax & raster_df$y > grid_bb$ymin & raster_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
   
-  raster100_to_save <- raster100_df %>% filter(x > grid_bb$xmin,
+  raster100_to_save <- raster_df %>% filter(x > grid_bb$xmin,
                                                x < grid_bb$xmax,
                                                y > grid_bb$ymin,
                                                y < grid_bb$ymax)
