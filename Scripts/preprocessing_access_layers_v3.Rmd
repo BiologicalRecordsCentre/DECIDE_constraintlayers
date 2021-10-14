@@ -7,8 +7,26 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## About
 
-Purling
+This script is the 3rd iteration (although v2 didn't really progress very far) of a script to use OSM data and downloaded offline data to 'pre-process' the access information we have (footpaths, greenspaces etc.) into a single raster file at 100x100m resolution which indicates whether that 100x100m square is accesible or not.
+
+This script can be run in a few ways:
+
+ - Run interactively in datalabs by running chunks
+ - Using rmarkdown `purl` function to export chunks to `.R` scripts which can be run as jobs in Rstudio (`/preproc_jobs/preprocessing_access_laters_job[1-8].R) - this is actually rather slow so not really using this approach
+ - Use JASMIN/SLURM to schedule using the `slurm_pre_proc.sbatch` file
+ 
+ 
+These scripts are generated from this main script using the code in the Purling subheading below.
+ 
+There is also the script `download_osm_data` which is a copy of the chunk `data_prep` from preprocessing_access_layers_v3.Rmd to run from the command line on JASMIN to download the OSM files for pre-processing access layers
+
+## Purling
+
+Here we've got two chunks that generate the `.R` scripts for Rstudio jobs and JASMIN/SLURM.
+
+You can see that it purls the script but then alters the first line of the scrpit to assign a job ID or or for the JASMIN script it ensure that it gets arguments from the command line call.
 
 Convert R markdown chunks into R script for running local jobs
 
@@ -37,37 +55,9 @@ write(lines,file="Scripts/preproc_jobs/preprocessing_access_layers_job_slurm.R")
 
 ```
 
+Finally, here starts the actual script... 
 
-
-
-Actual script
-
-Set working directories and file directories for datalabs or JASMIN
-
-```{r}
-if(exist(job_id)){
-  #datalabs
-  setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
-  
-  raw_data_location <- file.path("","data","data","DECIDE_constraintlayers","raw_data")
-  processed_data_location <- file.path("","data","data","DECIDE_constraintlayers","processed_data")
-  environmental_data_location <- file.path("","data","data","DECIDE_constraintlayers","environmental_data")
-}
-
-
-
-if(exist(slurm_grid_id)){
-  #JASMIN
-  setwd(file.path("","home","users","simrol","DECIDE","DECIDE_constraintlayers","Scripts"))
-  
-  raw_data_location <- file.path("home","users","simrol","DECIDE","raw_data")
-  processed_data_location <- file.path("home","users","simrol","DECIDE","processed_data")
-  environmental_data_location <- file.path("home","users","simrol","DECIDE","environmental_data")
-}
-
-```
-
-
+## Actual script
 
 ```{r load_packages}
 #THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT if generating job files
@@ -79,6 +69,30 @@ library(raster)
 library(rgdal)
 library(dplyr)
 library(htmlwidgets)
+
+```
+
+Set working directories and file directories for datalabs or JASMIN
+
+```{r}
+if(exists(job_id)){
+  #datalabs
+  setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
+  
+  raw_data_location <- file.path("","data","data","DECIDE_constraintlayers","raw_data")
+  processed_data_location <- file.path("","data","data","DECIDE_constraintlayers","processed_data")
+  environmental_data_location <- file.path("","data","data","DECIDE_constraintlayers","environmental_data")
+}
+
+
+if(exists(slurm_grid_id)){
+  #JASMIN
+  setwd(file.path("","home","users","simrol","DECIDE","DECIDE_constraintlayers","Scripts"))
+  
+  raw_data_location <- file.path("home","users","simrol","DECIDE","raw_data")
+  processed_data_location <- file.path("home","users","simrol","DECIDE","processed_data")
+  environmental_data_location <- file.path("home","users","simrol","DECIDE","environmental_data")
+}
 
 ```
 
@@ -468,7 +482,7 @@ test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
 Execture as a rstudio job (one of 8)
 
 ```{r rstudio_job}
-if(exist(job_id)){
+if(exists(job_id)){
   #set it all off as 8 seperate jobs, saving the individual 10k grids
   log_df <- data.frame(grid_no = 0,time_taken = "",time = "")[-1,]
   job_sequence <- seq.int(from = 1,to = 3025,length.out = 9)
@@ -493,7 +507,7 @@ SLURM script
 
 ```{r}
 
-if(exist(slurm_grid_id)){
+if(exists(slurm_grid_id)){
   
   time_taken <- system.time({
     access_raster <- assess_accessibility(slurm_grid_id,uk_grid,raster100_df,produce_map = F)

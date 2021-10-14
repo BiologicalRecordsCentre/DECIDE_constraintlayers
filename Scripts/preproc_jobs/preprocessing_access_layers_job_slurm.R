@@ -1,5 +1,5 @@
 args = commandArgs(trailingOnly=TRUE); slurm_grid_id <- args[1]
-if(exist(job_id)){
+if(exists(job_id)){
   #datalabs
   setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
   
@@ -10,7 +10,7 @@ if(exist(job_id)){
 
 
 
-if(exist(slurm_grid_id)){
+if(exists(slurm_grid_id)){
   #JASMIN
   setwd(file.path("","home","users","simrol","DECIDE","DECIDE_constraintlayers","Scripts"))
   
@@ -271,7 +271,7 @@ test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
 
 
 ## ----rstudio_job------------------------------------------------------------------------------
-if(exist(job_id)){
+if(exists(job_id)){
   #set it all off as 8 seperate jobs, saving the individual 10k grids
   log_df <- data.frame(grid_no = 0,time_taken = "",time = "")[-1,]
   job_sequence <- seq.int(from = 1,to = 3025,length.out = 9)
@@ -294,7 +294,7 @@ if(exist(job_id)){
 
 ## ---------------------------------------------------------------------------------------------
 
-if(exist(slurm_grid_id)){
+if(exists(slurm_grid_id)){
   
   time_taken <- system.time({
     access_raster <- assess_accessibility(slurm_grid_id,uk_grid,raster100_df,produce_map = F)

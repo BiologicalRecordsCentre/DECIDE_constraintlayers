@@ -1,4 +1,7 @@
-library(osmextract) #for using overpass API
+#this is a copy of the chunk `data_prep` from prepprocessing_access_layers_v3.Rmd to run from the command line on JASMIN to download
+# the OSM files for pre-processing access layers
+
+library(osmextract)
 library(sf)
 
 #JASMIN
