@@ -1,4 +1,4 @@
-library(osmdata) #for using overpass API
+library(osmextract) #for using overpass API
 library(sf)
 
 #JASMIN

@@ -13,6 +13,7 @@ Purling
 Convert R markdown chunks into R script for running local jobs
 
 ```{r, purl=FALSE}
+setwd("/data/notebooks/rstudio-conlayersimon/DECIDE_constraintlayers")
 for (i in 1:8){
   knitr::purl("Scripts/preprocessing_access_layers_v3.Rmd",output = paste0( "Scripts/preproc_jobs/preprocessing_access_layers_job",i,".R"))
   
@@ -26,6 +27,7 @@ for (i in 1:8){
 Convert R markdown chunks into R script that runs for one file (for JASMIN)
 
 ```{r, purl=FALSE}
+setwd("/data/notebooks/rstudio-conlayersimon/DECIDE_constraintlayers")
 knitr::purl("Scripts/preprocessing_access_layers_v3.Rmd",output = "Scripts/preproc_jobs/preprocessing_access_layers_job_slurm.R")
 
 lines <- readLines("Scripts/preproc_jobs/preprocessing_access_layers_job_slurm.R")
@@ -70,7 +72,7 @@ if(exist(slurm_grid_id)){
 ```{r load_packages}
 #THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT if generating job files
 #load packages
-library(osmdata) #for using overpass API
+library(osmextract) #for using overpass API
 library(sf)
 library(leaflet) # for making maps for sanity checking
 library(raster)

@@ -1,9 +1,30 @@
 job_id <- 1
-setwd("/data/notebooks/rstudio-conlayersimon/DECIDE_constraintlayers/Scripts")
+if(exist(job_id)){
+  #datalabs
+  setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
+  
+  raw_data_location <- file.path("","data","data","DECIDE_constraintlayers","raw_data")
+  processed_data_location <- file.path("","data","data","DECIDE_constraintlayers","processed_data")
+  environmental_data_location <- file.path("","data","data","DECIDE_constraintlayers","environmental_data")
+}
 
-#THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT
+
+
+if(exist(slurm_grid_id)){
+  #JASMIN
+  setwd(file.path("","home","users","simrol","DECIDE","DECIDE_constraintlayers","Scripts"))
+  
+  raw_data_location <- file.path("home","users","simrol","DECIDE","raw_data")
+  processed_data_location <- file.path("home","users","simrol","DECIDE","processed_data")
+  environmental_data_location <- file.path("home","users","simrol","DECIDE","environmental_data")
+}
+
+
+
+## ----load_packages----------------------------------------------------------------------------
+#THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT if generating job files
 #load packages
-library(osmdata) #for using overpass API
+library(osmextract) #for using overpass API
 library(sf)
 library(leaflet) # for making maps for sanity checking
 library(raster)
@@ -17,9 +38,9 @@ library(htmlwidgets)
 
 
 
-## ----access_offline_data---------------------------------------------------------------------------------
+## ----access_offline_data----------------------------------------------------------------------
 #base location
-base_location <- '/data/data/DECIDE_constraintlayers/raw_data/'
+base_location <- file.path(raw_data_location,"")
 
 #folders
 file_locations <- c(
@@ -38,7 +59,7 @@ get_offline_gridded_data <- function(grid_number){
   
   for (ii in 1:length(file_locations)){
     file_location <- file_locations[ii]
-    all_grids <- list.files(paste0(base_location,file_location))
+    all_grids <- list.files(file.path(base_location,file_location))
     
     right_file <- all_grids[grep(paste0("_",grid_number,".shp"), all_grids)]
     
@@ -57,28 +78,28 @@ get_offline_gridded_data <- function(grid_number){
   returned_files
 }
 
-# test <- get_offline_gridded_data(1516)
+# test <- get_offline_gridded_data(1313)
 # 
 # #check access with lapply
 check_access_lapply <- function(...){
   st_is_within_distance(...) %>% rowSums()
 }
-# 
+# requires taster_as_sf object which is defined later in the script so will error if you run this the script in order
 # test2 <- lapply(test,check_access_lapply,x = raster_as_sf,dist = 100,sparse = FALSE) %>% Reduce(f='+')
 
 
 
 
-## ----data_processing-------------------------------------------------------------------------------------
+## ----data_processing--------------------------------------------------------------------------
 sf::sf_use_s2(T)
 
 #load in required to do the job
 
-uk_grid <- st_read('/data/data/DECIDE_constraintlayers/raw_data/UK_grids/uk_grid_10km.shp')
+uk_grid <- st_read(file.path(raw_data_location,'UK_grids','uk_grid_10km.shp'))
 st_crs(uk_grid) <- 27700
 
 # the big raster
-raster100 <- raster::stack('/data/data/DECIDE_constraintlayers/environmental_data/100mRastOneLayer.grd')
+raster100 <- raster::stack(file.path(environmental_data_location,'100mRastOneLayer.grd'))
 #plot(raster100)
 #get the CRS for when we project back to raster from data ramew
 raster_crs <- st_crs(raster100)
@@ -113,27 +134,27 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   this_10k_gridWGS84_wkt <- this_10k_gridWGS84 %>% st_as_text()
   
   # load OSM data
-  osm_layer1 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/access_lines.gpkg",
+  osm_layer1 <- st_read(file.path(raw_data_location,"OSM","access_lines.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
                         )
 
-  osm_layer2 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_lines.gpkg",
+  osm_layer2 <- st_read(file.path(raw_data_location,"OSM","no_go_lines.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
                         )
 
-  osm_layer3_no_go <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_areas.gpkg",
+  osm_layer3_no_go <- st_read(file.path(raw_data_location,"OSM","no_go_areas.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
                         ) %>% filter(landuse != "military")
   
-  osm_layer3_warn <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/no_go_areas.gpkg",
+  osm_layer3_warn <- st_read(file.path(raw_data_location,"OSM","no_go_areas.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
                         ) %>% filter(landuse == "military")
 
-  osm_layer4 <- st_read("/data/data/DECIDE_constraintlayers/raw_data/OSM/water_areas.gpkg",
+  osm_layer4 <- st_read(file.path(raw_data_location,"OSM","water_areas.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
                         )
@@ -241,7 +262,7 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   return(raster100_to_save)
 }
 
-#test <- assess_accessibility(1516,uk_grid,raster100_df,produce_map = F)
+test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
 
 
 
@@ -249,7 +270,7 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
 
 
 
-## ----rstudio_job-----------------------------------------------------------------------------------------
+## ----rstudio_job------------------------------------------------------------------------------
 if(exist(job_id)){
   #set it all off as 8 seperate jobs, saving the individual 10k grids
   log_df <- data.frame(grid_no = 0,time_taken = "",time = "")[-1,]
@@ -271,7 +292,7 @@ if(exist(job_id)){
 
 
 
-## --------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------
 
 if(exist(slurm_grid_id)){
   
@@ -279,10 +300,9 @@ if(exist(slurm_grid_id)){
     access_raster <- assess_accessibility(slurm_grid_id,uk_grid,raster100_df,produce_map = F)
     })
     
-  saveRDS(access_raster,file = paste0("/data/data/DECIDE_constraintlayers/processed_data/access_raster_grid",slurm_grid_id,".RDS"))
+  saveRDS(access_raster,file = paste0(processed_data_location,"/access_raster_grid",slurm_grid_id,".RDS"))
   
   print(time_taken)
 }
-
 
 
