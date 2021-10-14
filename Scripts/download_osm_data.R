@@ -4,9 +4,9 @@ library(sf)
 #JASMIN
 setwd(file.path("","home","users","simrol","DECIDE","DECIDE_constraintlayers","Scripts"))
 
-raw_data_location <- file.path("home","users","simrol","DECIDE","raw_data")
-processed_data_location <- file.path("home","users","simrol","DECIDE","processed_data")
-environmental_data_location <- file.path("home","users","simrol","DECIDE","environmental_data")
+raw_data_location <- file.path("","home","users","simrol","DECIDE","raw_data")
+processed_data_location <- file.path("","home","users","simrol","DECIDE","processed_data")
+environmental_data_location <- file.path("","home","users","simrol","DECIDE","environmental_data")
 
 
 #set the extent of the area to get data from (use a geofabrik region name)
