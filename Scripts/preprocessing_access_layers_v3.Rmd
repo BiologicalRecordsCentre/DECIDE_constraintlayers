@@ -471,7 +471,7 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   return(raster100_to_save)
 }
 
-test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
+#test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
 
 
 

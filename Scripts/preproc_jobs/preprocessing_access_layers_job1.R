@@ -1,27 +1,4 @@
 job_id <- 1
-if(exist(job_id)){
-  #datalabs
-  setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
-  
-  raw_data_location <- file.path("","data","data","DECIDE_constraintlayers","raw_data")
-  processed_data_location <- file.path("","data","data","DECIDE_constraintlayers","processed_data")
-  environmental_data_location <- file.path("","data","data","DECIDE_constraintlayers","environmental_data")
-}
-
-
-
-if(exist(slurm_grid_id)){
-  #JASMIN
-  setwd(file.path("","home","users","simrol","DECIDE","DECIDE_constraintlayers","Scripts"))
-  
-  raw_data_location <- file.path("home","users","simrol","DECIDE","raw_data")
-  processed_data_location <- file.path("home","users","simrol","DECIDE","processed_data")
-  environmental_data_location <- file.path("home","users","simrol","DECIDE","environmental_data")
-}
-
-
-
-## ----load_packages----------------------------------------------------------------------------
 #THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT if generating job files
 #load packages
 library(osmextract) #for using overpass API
@@ -31,6 +8,28 @@ library(raster)
 library(rgdal)
 library(dplyr)
 library(htmlwidgets)
+
+
+
+## ---------------------------------------------------------------------------------------------
+if(exists("job_id")){
+  #datalabs
+  setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
+  
+  raw_data_location <- file.path("","data","data","DECIDE_constraintlayers","raw_data")
+  processed_data_location <- file.path("","data","data","DECIDE_constraintlayers","processed_data")
+  environmental_data_location <- file.path("","data","data","DECIDE_constraintlayers","environmental_data")
+}
+
+
+if(exists("slurm_grid_id")){
+  #JASMIN
+  setwd(file.path("","home","users","simrol","DECIDE","DECIDE_constraintlayers","Scripts"))
+  
+  raw_data_location <- file.path("","home","users","simrol","DECIDE","raw_data")
+  processed_data_location <- file.path("","home","users","simrol","DECIDE","processed_data")
+  environmental_data_location <- file.path("","home","users","simrol","DECIDE","environmental_data")
+}
 
 
 
@@ -262,7 +261,7 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   return(raster100_to_save)
 }
 
-test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
+#test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
 
 
 
@@ -271,7 +270,7 @@ test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
 
 
 ## ----rstudio_job------------------------------------------------------------------------------
-if(exist(job_id)){
+if(exists("job_id")){
   #set it all off as 8 seperate jobs, saving the individual 10k grids
   log_df <- data.frame(grid_no = 0,time_taken = "",time = "")[-1,]
   job_sequence <- seq.int(from = 1,to = 3025,length.out = 9)
@@ -294,7 +293,7 @@ if(exist(job_id)){
 
 ## ---------------------------------------------------------------------------------------------
 
-if(exist(slurm_grid_id)){
+if(exists("slurm_grid_id")){
   
   time_taken <- system.time({
     access_raster <- assess_accessibility(slurm_grid_id,uk_grid,raster100_df,produce_map = F)
