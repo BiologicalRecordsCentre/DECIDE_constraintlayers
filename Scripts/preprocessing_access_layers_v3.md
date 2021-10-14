@@ -1,36 +1,46 @@
----
-title: "Preproccessing access layers v3"
-output: github_document
----
-
-```{r setup, include=FALSE, purl=FALSE}
-knitr::opts_chunk$set(echo = TRUE,eval = F)
-```
+Preproccessing access layers v3
+================
 
 ## About
 
-This script is the 3rd iteration (although v2 didn't really progress very far) of a script to use OSM data and downloaded offline data to 'pre-process' the access information we have (footpaths, greenspaces etc.) into a single raster file at 100x100m resolution which indicates whether that 100x100m square is accesible or not.
+This script is the 3rd iteration (although v2 didn’t really progress
+very far) of a script to use OSM data and downloaded offline data to
+‘pre-process’ the access information we have (footpaths, greenspaces
+etc.) into a single raster file at 100x100m resolution which indicates
+whether that 100x100m square is accesible or not.
 
 This script can be run in a few ways:
 
- - Run interactively in datalabs by running chunks
- - Using rmarkdown `purl` function to export chunks to `.R` scripts which can be run as jobs in Rstudio (`/preproc_jobs/preprocessing_access_laters_job[1-8].R) - this is actually rather slow so not really using this approach
- - Use JASMIN/SLURM to schedule using the `slurm_pre_proc.sbatch` file
- 
- 
-These scripts are generated from this main script using the code in the Purling subheading below.
- 
-There is also the script `download_osm_data` which is a copy of the chunk `data_prep` from `preprocessing_access_layers_v3.Rmd` to run from the command line on JASMIN to download the OSM files for pre-processing access layers
+-   Run interactively in datalabs by running chunks
+-   Using rmarkdown `purl` function to export chunks to `.R` scripts
+    which can be run as jobs in Rstudio
+    (\`/preproc\_jobs/preprocessing\_access\_laters\_job\[1-8\].R) -
+    this is actually rather slow so not really using this approach
+-   Use JASMIN/SLURM to schedule using the `slurm_pre_proc.sbatch` file
+
+These scripts are generated from this main script using the code in the
+Purling subheading below.
+
+There is also the script `download_osm_data` which is a copy of the
+chunk `data_prep` from `preprocessing_access_layers_v3.Rmd` to run from
+the command line on JASMIN to download the OSM files for pre-processing
+access layers
 
 ## Purling
 
-Here we've got two chunks that generate the `.R` scripts for Rstudio jobs and JASMIN/SLURM.
+Here we’ve got two chunks that generate the `.R` scripts for Rstudio
+jobs and JASMIN/SLURM.
 
-You can see that it purls the script but then alters the first line of the scrpit to assign a job ID or or for the JASMIN script it ensure that it gets arguments from the command line call. We can then use the `exists()` function to check if the script is being run in datalabs or JASMIN to do different behaviors like where to set as a working directory.
+You can see that it purls the script but then alters the first line of
+the scrpit to assign a job ID or or for the JASMIN script it ensure that
+it gets arguments from the command line call. We can then use the
+`exists()` function to check if the script is being run in datalabs or
+JASMIN to do different behaviors like where to set as a working
+directory.
 
 Convert R markdown chunks into R script for running local jobs
 
-```{r, purl=FALSE}
+``` r
 setwd("/data/notebooks/rstudio-conlayersimon/DECIDE_constraintlayers")
 for (i in 1:8){
   knitr::purl("Scripts/preprocessing_access_layers_v3.Rmd",output = paste0( "Scripts/preproc_jobs/preprocessing_access_layers_job",i,".R"))
@@ -42,9 +52,10 @@ for (i in 1:8){
 }
 ```
 
-Convert R markdown chunks into R script that runs for one file (for JASMIN)
+Convert R markdown chunks into R script that runs for one file (for
+JASMIN)
 
-```{r, purl=FALSE}
+``` r
 setwd("/data/notebooks/rstudio-conlayersimon/DECIDE_constraintlayers")
 knitr::purl("Scripts/preprocessing_access_layers_v3.Rmd",output = "Scripts/preproc_jobs/preprocessing_access_layers_job_slurm.R")
 
@@ -52,14 +63,13 @@ lines <- readLines("Scripts/preproc_jobs/preprocessing_access_layers_job_slurm.R
 lines[1] <- 'args = commandArgs(trailingOnly=TRUE); slurm_grid_id <- args[1]'
 
 write(lines,file="Scripts/preproc_jobs/preprocessing_access_layers_job_slurm.R")
-
 ```
 
-Finally, here starts the actual script... 
+Finally, here starts the actual script…
 
 ## Set up
 
-```{r load_packages}
+``` r
 #THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT if generating job files
 #load packages
 library(osmextract) #for using overpass API
@@ -69,12 +79,11 @@ library(raster)
 library(rgdal)
 library(dplyr)
 library(htmlwidgets)
-
 ```
 
 Set working directories and file directories for datalabs or JASMIN
 
-```{r}
+``` r
 if(exists("job_id")){
   #datalabs
   setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
@@ -93,18 +102,16 @@ if(exists("slurm_grid_id")){
   processed_data_location <- file.path("","home","users","simrol","DECIDE","processed_data")
   environmental_data_location <- file.path("","home","users","simrol","DECIDE","environmental_data")
 }
-
 ```
 
 ## Data preparation
 
 ### Downloading and processing OSM data into GeoPackage format
 
-This onnly needs to be run once, and you'll see isn't purled into the scripts used by JASMIN
+This onnly needs to be run once, and you’ll see isn’t purled into the
+scripts used by JASMIN
 
-```{r data_prep, purl=FALSE}
-
-
+``` r
 #set the extent of the area to get data from (use a geofabrik region name)
 download_area <- "Great Britain"
 #download_area <- "North Yorkshire" # use a smaller area for testing
@@ -191,15 +198,20 @@ oe_get(
   force_vectortranslate = T,
   quiet = FALSE
 ) %>% st_write(file.path(raw_data_location,"OSM","water_areas.gpkg"),delete_layer = T)
-
 ```
 
-Demonstration of accessing the processed OSM data. This just shows how the OSM data is loaded in by using `st_read` and using a well known text filter to only extract the data for this area (rather than generating sepearate 10km grid squares - which would load faster but just measn you've got more files floating about).
+Demonstration of accessing the processed OSM data. This just shows how
+the OSM data is loaded in by using `st_read` and using a well known text
+filter to only extract the data for this area (rather than generating
+sepearate 10km grid squares - which would load faster but just measn
+you’ve got more files floating about).
 
-I use leaflet to generate a map to ensure that it's looking sensible and can try out different grid squares - it's a good sanity check that the data is in the right projection, and that the OSM features we've downloaded are the sorts of things we want use as access information.
+I use leaflet to generate a map to ensure that it’s looking sensible and
+can try out different grid squares - it’s a good sanity check that the
+data is in the right projection, and that the OSM features we’ve
+downloaded are the sorts of things we want use as access information.
 
-```{r data_demo, purl=FALSE}
-
+``` r
 uk_grid <- st_read(file.path(raw_data_location,"UK_grids","uk_grid_10km.shp"))
 st_crs(uk_grid) <- 27700
 this_10k_grid <- uk_grid[1313,]$geometry #get the 10kgrid
@@ -231,15 +243,17 @@ m <- leaflet() %>%
   addPolygons(data=this_10k_grid %>% st_transform(4326) ,opacity=1,fillOpacity = 0,weight=2,color = "black")
   
 m
-
 ```
-
 
 ### Accessing offline data sources
 
-This block defines a big function for getting offline files for a 10km grid number. In the `file_locations` vector you can define the file paths to look for shapefiles. If we add more data they need to be added here. Those shapefiles needs to have a number in their filename that indicates which grid square (1-3025) the data is for.
+This block defines a big function for getting offline files for a 10km
+grid number. In the `file_locations` vector you can define the file
+paths to look for shapefiles. If we add more data they need to be added
+here. Those shapefiles needs to have a number in their filename that
+indicates which grid square (1-3025) the data is for.
 
-```{r access_offline_data}
+``` r
 #base location
 base_location <- file.path(raw_data_location,"")
 
@@ -287,23 +301,24 @@ check_access_lapply <- function(...){
 }
 # requires taster_as_sf object which is defined later in the script so will error if you run this the script in order
 # test2 <- lapply(test,check_access_lapply,x = raster_as_sf,dist = 100,sparse = FALSE) %>% Reduce(f='+')
-
-
 ```
 
 ## Data processing
 
-This is where the main processing happens, taking all the access layers and the coordinates (from a raster) for the centroid of each 100mx100m grid square and determining if each centroid is near a good accesble feature - or a bad feature like water or land fill site. 
+This is where the main processing happens, taking all the access layers
+and the coordinates (from a raster) for the centroid of each 100mx100m
+grid square and determining if each centroid is near a good accesble
+feature - or a bad feature like water or land fill site.
 
-The function takes 4 arguments
- - `grid_number` - the number of the grid from 1 to 3025
- - `grids` - the UK 10km grids
- - `raster_df` - a data frame of the 100x100m grid square centroids in easting and northings
- - `produce_map` - if `TRUE` the function will return a leaflet map instead of the 
+The function takes 4 arguments - `grid_number` - the number of the grid
+from 1 to 3025 - `grids` - the UK 10km grids - `raster_df` - a data
+frame of the 100x100m grid square centroids in easting and northings -
+`produce_map` - if `TRUE` the function will return a leaflet map instead
+of the
 
 Setting this up as a function means to be able to be run as jobs.
 
-```{r data_processing}
+``` r
 sf::sf_use_s2(T)
 
 #load in required to do the job
@@ -480,9 +495,10 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
 
 ### If executed as an Rstudio job
 
-Build a dataframe called `log_df` that records how long it took to process each grid square
+Build a dataframe called `log_df` that records how long it took to
+process each grid square
 
-```{r rstudio_job}
+``` r
 if(exists("job_id")){
   #set it all off as 8 seperate jobs, saving the individual 10k grids
   log_df <- data.frame(grid_no = 0,time_taken = "",time = "")[-1,]
@@ -501,15 +517,13 @@ if(exists("job_id")){
     saveRDS(log_df,file = paste0("/data/data/DECIDE_constraintlayers/processed_data/logs/log_",job_id,".RDS"))
   }
 }
-
 ```
 
 ### If exectuted as a SLURM script
 
 Just save the file and print the time taken
 
-```{r}
-
+``` r
 if(exists("slurm_grid_id")){
   
   time_taken <- system.time({
@@ -520,10 +534,4 @@ if(exists("slurm_grid_id")){
   
   print(time_taken)
 }
-
 ```
-
-
-
-
-
