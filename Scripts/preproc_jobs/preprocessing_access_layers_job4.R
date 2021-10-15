@@ -1,13 +1,14 @@
 job_id <- 4
-#THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT if generating job files
+#THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT if generating job or JASMIN files
 #load packages
-library(osmextract) #for using overpass API
-library(sf)
-library(leaflet) # for making maps for sanity checking
-library(raster)
-library(rgdal)
-library(dplyr)
-library(htmlwidgets)
+#messages suppressed so that the .err file from JASMIN/slurm only contains errors: https://stackoverflow.com/questions/14834841/when-does-quietly-true-actually-work-in-the-require-function
+suppressMessages(suppressWarnings(library(osmextract))) #for using overpass API
+suppressMessages(suppressWarnings(library(sf))) #for all the geographic operations
+suppressMessages(suppressWarnings(library(leaflet))) # for making maps for sanity checking
+suppressMessages(suppressWarnings(library(raster)))
+suppressMessages(suppressWarnings(library(rgdal)))
+suppressMessages(suppressWarnings(library(dplyr)))
+suppressMessages(suppressWarnings(library(htmlwidgets)))
 
 
 
@@ -94,7 +95,7 @@ sf::sf_use_s2(T)
 
 #load in required to do the job
 
-uk_grid <- st_read(file.path(raw_data_location,'UK_grids','uk_grid_10km.shp'))
+uk_grid <- st_read(file.path(raw_data_location,'UK_grids','uk_grid_10km.shp'),quiet = T)
 st_crs(uk_grid) <- 27700
 
 # the big raster
@@ -119,13 +120,13 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   grid_bb <- st_bbox(this_10k_grid)
   
   #get the centroids of the the 100m grids within the 10k grid
-  raster_this_grid <- raster100_df %>% filter(x > grid_bb$xmin,
+  raster_this_grid <- raster_df %>% filter(x > grid_bb$xmin,
                                               x < grid_bb$xmax,
                                               y > grid_bb$ymin,
                                               y < grid_bb$ymax)
   
   #get the easting and northing projection
-  projcrs <- crs(this_10k_grid)
+  projcrs <- st_crs(this_10k_grid)
   
   # make the raster df into a sd object using the projection but transform it to WGS84 for these operations
   raster_as_sf <- st_as_sf(raster_this_grid,coords = c("x", "y"),crs = projcrs) %>% st_transform(4326)
@@ -210,8 +211,6 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
     sf::sf_use_s2(T)
   })
   
-  
-  
   # water buffering options (currently not used)
   # if(sum(distance_check_water>0)>0){
   #   buffered_water_points <- raster_as_sf[distance_check_water>0,] %>% st_buffer(dist=50)
@@ -220,7 +219,6 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   #   distance_check_water <- 0
   #   distance_check_water[rownames(raster_as_sf) %in% rownames(buffered_water_points)[points_in_water>0]] <- 1
   # }
-  
   
   raster_as_sf$access <- distance_check_good
   raster_as_sf$no_go <- distance_check_bad
@@ -232,6 +230,10 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   raster_as_sf$composite[raster_as_sf$access>0 & raster_as_sf$no_go==0] <- 1 #go
   raster_as_sf$composite[raster_as_sf$access>0 & raster_as_sf$warning > 0] <- 0.75 # warning
   raster_as_sf$composite[raster_as_sf$water>0] <- 0.25 #water
+  
+  #memory checks
+  sort( sapply(ls(),function(x){object.size(get(x))})) %>% print()
+  sum( sapply(ls(),function(x){object.size(get(x))})) %>% print()
   
   if(produce_map){
     m <- leaflet() %>%
@@ -251,9 +253,9 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   }
   
   
-  raster100_df[raster100_df$x > grid_bb$xmin & raster100_df$x < grid_bb$xmax & raster100_df$y > grid_bb$ymin & raster100_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
+  raster_df[raster_df$x > grid_bb$xmin & raster_df$x < grid_bb$xmax & raster_df$y > grid_bb$ymin & raster_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
   
-  raster100_to_save <- raster100_df %>% filter(x > grid_bb$xmin,
+  raster100_to_save <- raster_df %>% filter(x > grid_bb$xmin,
                                                x < grid_bb$xmax,
                                                y > grid_bb$ymin,
                                                y < grid_bb$ymax)
@@ -261,11 +263,13 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   return(raster100_to_save)
 }
 
-#test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
+#1313 is near Ladybower reservoir in the peak district
+#test <- assess_accessibility(1016,uk_grid,raster100_df,produce_map = F)
 
 
-
-
+#Assessing memory usage:
+#sort( sapply(ls(),function(x){object.size(get(x),units="Mb")})) 
+#print(object.size(x=lapply(ls(), get)), units="Mb")
 
 
 
@@ -298,6 +302,12 @@ if(exists("slurm_grid_id")){
   time_taken <- system.time({
     access_raster <- assess_accessibility(slurm_grid_id,uk_grid,raster100_df,produce_map = F)
     })
+  
+  if(exists("access_raster")){
+    print("Success, preprocced access raster produced!")
+  } else {
+    print("Failure, preprocced access raster not produced!")
+  }
     
   saveRDS(access_raster,file = paste0(processed_data_location,"/access_raster_grid",slurm_grid_id,".RDS"))
   
