@@ -1,4 +1,6 @@
 #run chunk from script v3 to get filepaths
+library(sf)
+library(raster)
 
 #load in raster and grids
 raster100 <- raster::stack(file.path(environmental_data_location,'100mRastOneLayer.grd'))

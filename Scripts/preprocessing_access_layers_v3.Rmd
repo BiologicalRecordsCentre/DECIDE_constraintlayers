@@ -75,7 +75,7 @@ suppressMessages(suppressWarnings(library(htmlwidgets)))
 
 Set working directories and file directories for datalabs or JASMIN
 
-```{r}
+```{r filepaths}
 if(exists("job_id")){
   #datalabs
   setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
@@ -299,8 +299,7 @@ This is where the main processing happens, taking all the access layers and the 
 The function takes 4 arguments
  - `grid_number` - the number of the grid from 1 to 3025
  - `grids` - the UK 10km grids
- - `raster_df` - a data frame of the 100x100m grid square centroids in easting and northings
- - `produce_map` - if `TRUE` the function will return a leaflet map instead of the 
+ - `produce_map` - if `TRUE` the function will return a leaflet map instead of the easting/northing/access_score dataframe
 
 Setting this up as a function means to be able to be run as jobs.
 
@@ -313,11 +312,11 @@ uk_grid <- st_read(file.path(raw_data_location,'UK_grids','uk_grid_10km.shp'),qu
 st_crs(uk_grid) <- 27700
 
 # the big raster
-raster100 <- raster::stack(file.path(environmental_data_location,'100mRastOneLayer.grd'))
+#raster100 <- raster::stack(file.path(environmental_data_location,'100mRastOneLayer.grd'))
 #plot(raster100)
 #get the CRS for when we project back to raster from data ramew
-raster_crs <- st_crs(raster100)
-raster100_df <- as.data.frame(raster100, xy=T, centroids=TRUE)[,1:2]
+#raster_crs <- st_crs(raster100)
+#raster100_df <- as.data.frame(raster100, xy=T, centroids=TRUE)[,1:2]
 
 
 #for testing:
@@ -334,10 +333,16 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   grid_bb <- st_bbox(this_10k_grid)
   
   #get the centroids of the the 100m grids within the 10k grid
-  raster_this_grid <- raster_df %>% filter(x > grid_bb$xmin,
-                                              x < grid_bb$xmax,
-                                              y > grid_bb$ymin,
-                                              y < grid_bb$ymax)
+  # raster_this_grid <- raster_df %>% filter(x > grid_bb$xmin,
+  #                                             x < grid_bb$xmax,
+  #                                             y > grid_bb$ymin,
+  #                                             y < grid_bb$ymax)
+  
+  
+  raster_this_grid <- readRDS(file.path(environmental_data_location,paste0("100mrast_grid_",grid_number,".RDS")))
+  
+  #LOAD raster_this_grid from file
+  
   
   #get the easting and northing projection
   projcrs <- st_crs(this_10k_grid)
@@ -446,8 +451,8 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   raster_as_sf$composite[raster_as_sf$water>0] <- 0.25 #water
   
   #memory checks
-  sort( sapply(ls(),function(x){object.size(get(x))})) %>% print()
-  sum( sapply(ls(),function(x){object.size(get(x))})) %>% print()
+  #sort( sapply(ls(),function(x){object.size(get(x))})) %>% print()
+  #sum( sapply(ls(),function(x){object.size(get(x))})) %>% print()
   
   if(produce_map){
     m <- leaflet() %>%
@@ -466,13 +471,15 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
     return(m)
   }
   
+  raster_this_grid$access <- raster_as_sf$composite
+  raster100_to_save <- raster_this_grid
   
-  raster_df[raster_df$x > grid_bb$xmin & raster_df$x < grid_bb$xmax & raster_df$y > grid_bb$ymin & raster_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
+  #raster_df[raster_df$x > grid_bb$xmin & raster_df$x < grid_bb$xmax & raster_df$y > grid_bb$ymin & raster_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
   
-  raster100_to_save <- raster_df %>% filter(x > grid_bb$xmin,
-                                               x < grid_bb$xmax,
-                                               y > grid_bb$ymin,
-                                               y < grid_bb$ymax)
+  # raster100_to_save <- raster_df %>% filter(x > grid_bb$xmin,
+  #                                              x < grid_bb$xmax,
+  #                                              y > grid_bb$ymin,
+  #                                              y < grid_bb$ymax)
   
   return(raster100_to_save)
 }
@@ -502,7 +509,7 @@ if(exists("job_id")){
   for (i in job_sequence[job_id]:job_sequence[job_id+1]){
     cat(paste('\r grid:',i," progress:",round((i-job_sequence[job_id])/378*100),"%"))
     time_taken <- system.time({
-      access_raster <- assess_accessibility(i,uk_grid,raster100_df,produce_map = F)
+      access_raster <- assess_accessibility(i,uk_grid,produce_map = F)
       })
     
     log_df[nrow(log_df)+1,] <- c(i,time_taken[3],Sys.time()%>% toString())
@@ -524,7 +531,7 @@ Just save the file and print the time taken
 if(exists("slurm_grid_id")){
   
   time_taken <- system.time({
-    access_raster <- assess_accessibility(slurm_grid_id,uk_grid,raster100_df,produce_map = F)
+    access_raster <- assess_accessibility(slurm_grid_id,uk_grid,produce_map = F)
     })
   
   if(exists("access_raster")){
