@@ -99,7 +99,7 @@ uk_grid <- st_read(file.path(raw_data_location,'UK_grids','uk_grid_10km.shp'),qu
 st_crs(uk_grid) <- 27700
 
 # the big raster
-raster100 <- raster::stack(file.path(environmental_data_location,'100mRastOneLayer.grd'))
+#raster100 <- raster::stack(file.path(environmental_data_location,'100mRastOneLayer.grd'))
 #plot(raster100)
 #get the CRS for when we project back to raster from data ramew
 #raster_crs <- st_crs(raster100)
@@ -112,7 +112,7 @@ raster100 <- raster::stack(file.path(environmental_data_location,'100mRastOneLay
 #raster_df <- raster100_df
 
 #define the function for assessing accessibility
-assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
+assess_accessibility <- function(grid_number,grids,produce_map = F){
   
   #load 10k grid
   this_10k_grid <- grids[grid_number,]$geometry #get the 10kgrid
@@ -238,8 +238,8 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   raster_as_sf$composite[raster_as_sf$water>0] <- 0.25 #water
   
   #memory checks
-  sort( sapply(ls(),function(x){object.size(get(x))})) %>% print()
-  sum( sapply(ls(),function(x){object.size(get(x))})) %>% print()
+  #sort( sapply(ls(),function(x){object.size(get(x))})) %>% print()
+  #sum( sapply(ls(),function(x){object.size(get(x))})) %>% print()
   
   if(produce_map){
     m <- leaflet() %>%
@@ -272,7 +272,7 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
 }
 
 #1313 is near Ladybower reservoir in the peak district
-#test <- assess_accessibility(1016,uk_grid,raster100_df,produce_map = F)
+#test <- assess_accessibility(1016,uk_grid,produce_map = F)
 
 
 #Assessing memory usage:

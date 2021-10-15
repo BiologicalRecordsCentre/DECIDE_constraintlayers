@@ -325,7 +325,7 @@ st_crs(uk_grid) <- 27700
 #raster_df <- raster100_df
 
 #define the function for assessing accessibility
-assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
+assess_accessibility <- function(grid_number,grids,produce_map = F){
   
   #load 10k grid
   this_10k_grid <- grids[grid_number,]$geometry #get the 10kgrid
@@ -485,7 +485,7 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
 }
 
 #1313 is near Ladybower reservoir in the peak district
-#test <- assess_accessibility(1016,uk_grid,raster100_df,produce_map = F)
+#test <- assess_accessibility(1016,uk_grid,produce_map = F)
 
 
 #Assessing memory usage:
