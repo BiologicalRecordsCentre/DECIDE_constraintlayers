@@ -9,7 +9,7 @@ suppressMessages(suppressWarnings(library(raster)))
 suppressMessages(suppressWarnings(library(rgdal)))
 suppressMessages(suppressWarnings(library(dplyr)))
 suppressMessages(suppressWarnings(library(htmlwidgets)))
-
+suppressMessages(suppressWarnings(library(htmltools))) # for htmlEscape()
 
 
 ## ----filepaths--------------------------------------------------------------------------------
@@ -36,6 +36,32 @@ if(exists("slurm_grid_id")){
 
 
 
+## ---------------------------------------------------------------------------------------------
+#Access lines
+vt_opts_1 = c(
+    "-select", "osm_id, highway, designation, footway, sidewalk",
+    "-where", "highway IN ('track')"
+  )
+
+oe_get(
+  "Scotland",
+  layer = "lines",
+  provider = "geofabrik",
+  match_by = "name",
+  max_string_dist = 1,
+  level = NULL,
+  download_directory = file.path(raw_data_location,"OSM"),
+  force_download = F,
+  vectortranslate_options = vt_opts_1,
+  extra_tags = c("designation","footway","sidewalk"),
+  force_vectortranslate = T,
+  quiet = FALSE
+) %>% st_write(file.path(raw_data_location,"OSM","access_lines_scot.gpkg"),delete_layer = T)
+
+
+
+
+
 
 
 ## ----access_offline_data----------------------------------------------------------------------
@@ -46,11 +72,20 @@ base_location <- file.path(raw_data_location,"")
 file_locations <- c(
   'CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/',
   'OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_greenspace_data_10km/',
-  #'SSSIs/gridded_data_10km/',
   'greater-london-latest-free/london_gridded_data_10km/',
   'rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/',
   #'RSPB_Reserve_Boundaries/gridded_data_10km/',
-  'national_trust/gridded_data_10km/'
+  'national_trust/gridded_data_10km/',
+  
+  'Scotland/cairngorms/gridded_data_10km/',
+  'Scotland/core_paths/gridded_data_10km/',
+  'Scotland/local_nature_conservation_sites/gridded_data_10km/',
+  'Scotland/local_nature_reserves/gridded_data_10km/',
+  'Scotland/lochlomond_tross/gridded_data_10km/',
+  'Scotland/public_access_rural/gridded_data_10km/',
+  'Scotland/public_access_wiat/gridded_data_10km/',
+  'Scotland/wildland_scotland/gridded_data_10km/'
+  
 )
 
 # function to get the data
@@ -144,6 +179,11 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
                         )
+  
+  osm_layer1_scot <- st_read(file.path(raw_data_location,"OSM","access_lines_scot.gpkg"),
+                        wkt_filter = this_10k_gridWGS84_wkt,
+                        quiet = T
+                        )
 
   osm_layer2 <- st_read(file.path(raw_data_location,"OSM","no_go_lines.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
@@ -196,7 +236,10 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   tryCatch({
     #check OSM data
     #good lines
-    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1,dist = 100,sparse = FALSE))  
+    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1,dist = 100,sparse = FALSE))
+    
+    #Scottish tracks and other features that we might want to exclude in England/Wales
+    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1_scot,dist = 100,sparse = FALSE))
     
     #bad lines and areas
     distance_check_bad <- distance_check_bad + rowSums(st_is_within_distance(raster_as_sf,osm_layer2,dist = 50,sparse = FALSE)) + rowSums(st_is_within_distance(raster_as_sf,osm_layer3_no_go,dist = 25,sparse = FALSE)) 
@@ -211,6 +254,8 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
     #same as before but without spherical geometry
     sf::sf_use_s2(F)
     distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1,dist = 100,sparse = FALSE))  
+    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1_scot,dist = 100,sparse = FALSE))
+    
     distance_check_bad <- distance_check_bad + rowSums(st_is_within_distance(raster_as_sf,osm_layer2,dist = 50,sparse = FALSE)) + rowSums(st_is_within_distance(raster_as_sf,osm_layer3_no_go,dist = 25,sparse = FALSE)) 
     distance_check_warning <- distance_check_warning + rowSums(st_is_within_distance(raster_as_sf,osm_layer3_warn,dist = 25,sparse = FALSE))
     distance_check_water <- distance_check_water + rowSums(st_is_within_distance(raster_as_sf,osm_layer4,dist = 0,sparse = FALSE))
@@ -255,7 +300,12 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
       addCircles(data = raster_as_sf %>% filter(composite==0.75),radius = 50,weight=0,color = "orange") %>%
       addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "white")
     
-    return(m)
+    #save
+    saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number))
+    
+    #then rename (so that it's using the same supporting files folder as the other maps - to stop uploading endless copies of js libraries)
+    file.rename(from = "../docs/access_map_grid.html", to = paste0("../docs/access_map_grid_",grid_number,".html"))
+    #return(m)
   }
   
   raster_this_grid$access <- raster_as_sf$composite
@@ -272,12 +322,14 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
 }
 
 #1313 is near Ladybower reservoir in the peak district
-#test <- assess_accessibility(1016,uk_grid,produce_map = F)
-
+test <- assess_accessibility(2257,uk_grid,produce_map = T)
+test
 
 #Assessing memory usage:
 #sort( sapply(ls(),function(x){object.size(get(x),units="Mb")})) 
 #print(object.size(x=lapply(ls(), get)), units="Mb")
+
+
 
 
 
