@@ -521,10 +521,10 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
       addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "white")
     
     #save
-    saveWidget(m, file="../maps/access_map_grid.html",title =  paste0("Grid: ",grid_number))
+    saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number))
     
     #then rename (so that it's using the same supporting files folder as the other maps - to stop uploading endless copies of js libraries)
-    file.rename(from = "../maps/access_map_grid.html", to = paste0("../maps/access_map_grid_",grid_number,".html"))
+    file.rename(from = "../docs/access_map_grid.html", to = paste0("../docs/access_map_grid_",grid_number,".html"))
     #return(m)
   }
   
@@ -561,7 +561,7 @@ m <- leaflet() %>%
 
 m
 
-saveWidget(m, file="../maps/access_map_grid_master.html",title = "Master grid map")
+saveWidget(m, file="../docs/access_map_grid_master.html",title = "Master grid map")
 
 ```
 
