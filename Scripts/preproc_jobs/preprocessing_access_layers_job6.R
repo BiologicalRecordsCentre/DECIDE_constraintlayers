@@ -40,7 +40,7 @@ if(exists("slurm_grid_id")){
 #Access lines
 vt_opts_1 = c(
     "-select", "osm_id, highway, designation, footway, sidewalk",
-    "-where", "highway IN ('track')"
+    "-where", "highway IN ('track', 'cycleway')"
   )
 
 oe_get(
@@ -193,12 +193,12 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   osm_layer3_no_go <- st_read(file.path(raw_data_location,"OSM","no_go_areas.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
-                        ) %>% filter(landuse != "military")
+                        ) %>% filter(aeroway == "aerodrome") 
   
   osm_layer3_warn <- st_read(file.path(raw_data_location,"OSM","no_go_areas.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
-                        ) %>% filter(landuse == "military")
+                        ) %>% filter(landuse %in% c("military",'quarry','landfill','industrial'))
 
   osm_layer4 <- st_read(file.path(raw_data_location,"OSM","water_areas.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
@@ -293,15 +293,15 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
       addPolylines(data = osm_layer2,weight = 1,color = "red") %>%
       addPolygons(data = osm_layer3_warn,weight = 1,fillColor ="orange") %>%
       addPolygons(data = osm_layer3_no_go,weight = 1,fillColor ="red") %>%
-      addPolygons(data = osm_layer4,weight = 1) %>%
+      #addPolygons(data = osm_layer4,weight = 1) %>%
       addPolygons(data=this_10k_grid %>% st_transform(4326) ,opacity=1,fillOpacity = 0,weight=2,color = "black") %>%
       addCircles(data = raster_as_sf %>% filter(composite==1),radius = 50,weight=0,color = "blue") %>%
       addCircles(data = raster_as_sf %>% filter(composite==0),radius = 50,weight=0,color = "red") %>%
       addCircles(data = raster_as_sf %>% filter(composite==0.75),radius = 50,weight=0,color = "orange") %>%
-      addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "white")
+      addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "red")
     
     #save
-    saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number))
+    saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number," generated ",date()))
     
     #then rename (so that it's using the same supporting files folder as the other maps - to stop uploading endless copies of js libraries)
     file.rename(from = "../docs/access_map_grid.html", to = paste0("../docs/access_map_grid_",grid_number,".html"))
@@ -322,7 +322,7 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
 }
 
 #1313 is near Ladybower reservoir in the peak district
-test <- assess_accessibility(2257,uk_grid,produce_map = T)
+test <- assess_accessibility(944,uk_grid,produce_map = T)
 test
 
 #Assessing memory usage:
@@ -342,7 +342,7 @@ if(exists("job_id")){
   for (i in job_sequence[job_id]:job_sequence[job_id+1]){
     cat(paste('\r grid:',i," progress:",round((i-job_sequence[job_id])/378*100),"%"))
     time_taken <- system.time({
-      access_raster <- assess_accessibility(i,uk_grid,produce_map = F)
+      access_raster <- assess_accessibility(i,uk_grid,produce_map = T)
       })
     
     log_df[nrow(log_df)+1,] <- c(i,time_taken[3],Sys.time()%>% toString())
@@ -360,7 +360,7 @@ if(exists("job_id")){
 if(exists("slurm_grid_id")){
   
   time_taken <- system.time({
-    access_raster <- assess_accessibility(slurm_grid_id,uk_grid,produce_map = F)
+    access_raster <- assess_accessibility(slurm_grid_id,uk_grid,produce_map = T)
     })
   
   if(exists("access_raster")){
