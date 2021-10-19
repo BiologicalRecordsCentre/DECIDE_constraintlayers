@@ -561,7 +561,7 @@ m <- leaflet() %>%
 
 m
 
-saveWidget(m, file="../docs/access_map_grid_master.html",title = "Master grid map")
+saveWidget(m, file="../docs/index.html",title = "Master grid map")
 
 ```
 
