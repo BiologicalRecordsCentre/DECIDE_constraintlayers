@@ -73,34 +73,48 @@ DECIDE_constraintlayers
 |   │   ...
 |
 └───environmental_data
-|   │   100mRastOneLayer.gri
-|   │   100mRastOneLayer.grd
-|   │   100mrast_grid_1.RDS
-|   │   100mrast_grid_2.RDS
+    │   100mRastOneLayer.gri
+    │   100mRastOneLayer.grd
+    │   100mrast_grid_1.RDS
+    │   100mrast_grid_2.RDS
 ```
 
+The `raw_data` holds the raw unprocessed data from any or all sources. The `OSM` folder is the download location for `osmextract` downloads (in `.osm.pbf` format) and subsequent vector translated `.gpkg` files with specifc features such as footpaths or water. The `UK_grids`folder contains a shapefile for the 3025 10km grid squares that cover the whole of the UK. There are one folder for each data layer (eg the public rights of way layer). Somewhere in each of these folders are folders containing the gridded 10km data in a folder called `gridded_data_10km` (or similar). File paths to these layers are defined in the `preprocessing_access_layers_v3.Rmd` script. New layers won't be picked up automatically so if you download a new layer of data then ensure you point the script to the folder containing the 10km gridded version of the script.
 
-Within that folder there is a folder called `raw_data` which then contains one folder for each data layer. Somewhere in each of these folders are folders containing the gridded 10km data in a folder called `gridded_data_10km` (or similar)
+The `processed_data` folder contains a `.RDS` file which is a dataframe of the 100x100m grid square centroids and their accessibility value.
 
-### Splitting national datasets into 10km grid squares
+The `environmental_data` foder contains the UK 100x100m grid square raster, and the gridded version dataframe of this stored as `.RDS` files.
+
+### Splitting national datasets into 10km grid squares (pre-pre-processing!)
 
 This repository containts the scripts for processing the constraint layers. These scripts take the raw data files from the source do various processing steps and split them into 10km grid squares. It is these 10km grid squares that are loaded into the app. The scripts are located in the `/Scripts` folder. There is typically one script for processing each layer.
 
 Note: as of 15/8/21 we have moved the file location of the data so running old scripts may fail and you will need to update the filepath. See: https://github.com/BiologicalRecordsCentre/DECIDE-app/issues/122
 
-## The constraint layers
+### Pre-processing the access layers into the 100m resolution access raster
 
-### Data we have
+The `preprocessing_access_layers_v3.Rmd` script contains the code but using the `purl ` function it generates a set of scripts that can either be run as jobs on Rstudio (https://solutions.rstudio.com/r/jobs/) or on JASMIN.
 
- * CRoW
- * Greater london 
- * Land cover map 2019
- * Military areas (Work in progress)
+The JASMIN script is set up to take a single argument, the grid number, and loads in all the relevant data for that grid square and returns a dataframe with easting, northing and access score. It can be run using `sbatch` using `slurm_pre_proc.sbatch`.
+
+### Generating maps
+
+If the argument `produce_map` is `T` then the script will produce a leaflet map at https://github.com/BiologicalRecordsCentre/DECIDE_constraintlayers/tree/main/maps.
+
+You can navigate to the right grid using the main grid map called `access_map_grid_master.html`.
+
+## The constraint layers used for determing access score
+
+Also outlined in excel sheet one OneDrive
+
+### Offline files
+
+ * CRoW (Countryside right of way act 2000)
+ * Greater london
  * National Trust
  * OS green spaces
- * OS roadnetwork
  * Footpath and bridleways
- * RSPB reserve boundaries
+ * RSPB reserve boundaries (not currently used)
  * Scotland:
     * Cairngorms
     * Core paths
@@ -110,4 +124,21 @@ Note: as of 15/8/21 we have moved the file location of the data so running old s
     * Public access rural
     * Public access wiat (woods in and around town: https://forestry.gov.scot/forests-people/communities/woods-in-and-around-towns-wiat)
     * Wildland Scotland
- * SSSIs
+
+### OSM data
+
+See https://github.com/BiologicalRecordsCentre/DECIDE_constraintlayers/blob/main/Scripts/preprocessing_access_layers_v3.md#data-preparation for query details
+
+ * Access lines:
+    * Footpath
+    * bridleways
+    * small roads
+    * etc.
+ * No go lines:
+    * Motorways
+    * Railways
+ * No go areas:
+    * Airports
+    * Landfill sites
+    * Quarrys
+ * Water
