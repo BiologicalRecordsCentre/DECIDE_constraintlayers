@@ -12,7 +12,7 @@ suppressMessages(suppressWarnings(library(htmlwidgets)))
 suppressMessages(suppressWarnings(library(htmltools))) # for htmlEscape()
 
 
-## ----filepaths--------------------------------------------------------------------------------
+## ----filepaths---------------------------------------------------------------------------------
 if(exists("job_id")){
   #datalabs
   setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
@@ -40,7 +40,7 @@ if(exists("slurm_grid_id")){
 
 
 
-## ----access_offline_data----------------------------------------------------------------------
+## ----access_offline_data-----------------------------------------------------------------------
 #base location
 base_location <- file.path(raw_data_location,"")
 
@@ -101,7 +101,7 @@ check_access_lapply <- function(...){
 
 
 
-## ----data_processing--------------------------------------------------------------------------
+## ----data_processing---------------------------------------------------------------------------
 sf::sf_use_s2(T)
 
 #load in required to do the job
@@ -277,7 +277,7 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
       addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "red")
     
     #save
-    saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number," generated ",date()),selfcontained =F)
+    saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number," generated ",date()),selfcontained = T)
     
     #then rename (so that it's using the same supporting files folder as the other maps - to stop uploading endless copies of js libraries)
     file.rename(from = "../docs/access_map_grid.html", to = paste0("../docs/access_map_grid_",grid_number,".html"))
@@ -309,7 +309,7 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
 
 
 
-## ----rstudio_job------------------------------------------------------------------------------
+## ----rstudio_job-------------------------------------------------------------------------------
 if(exists("job_id")){
   #set it all off as 8 seperate jobs, saving the individual 10k grids
   log_df <- data.frame(grid_no = 0,time_taken = "",time = "")[-1,]
@@ -331,7 +331,7 @@ if(exists("job_id")){
 
 
 
-## ---------------------------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------
 
 if(exists("slurm_grid_id")){
   
