@@ -36,30 +36,6 @@ if(exists("slurm_grid_id")){
 
 
 
-## ---------------------------------------------------------------------------------------------
-#Access lines
-vt_opts_1 = c(
-    "-select", "osm_id, highway, designation, footway, sidewalk",
-    "-where", "highway IN ('track', 'cycleway')"
-  )
-
-oe_get(
-  "Scotland",
-  layer = "lines",
-  provider = "geofabrik",
-  match_by = "name",
-  max_string_dist = 1,
-  level = NULL,
-  download_directory = file.path(raw_data_location,"OSM"),
-  force_download = F,
-  vectortranslate_options = vt_opts_1,
-  extra_tags = c("designation","footway","sidewalk"),
-  force_vectortranslate = T,
-  quiet = FALSE
-) %>% st_write(file.path(raw_data_location,"OSM","access_lines_scot.gpkg"),delete_layer = T)
-
-
-
 
 
 
@@ -322,8 +298,8 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
 }
 
 #1313 is near Ladybower reservoir in the peak district
-test <- assess_accessibility(944,uk_grid,produce_map = T)
-test
+# test <- assess_accessibility(944,uk_grid,produce_map = T)
+# test
 
 #Assessing memory usage:
 #sort( sapply(ls(),function(x){object.size(get(x),units="Mb")})) 
