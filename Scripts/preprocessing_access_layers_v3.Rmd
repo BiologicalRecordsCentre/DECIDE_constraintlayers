@@ -197,7 +197,7 @@ oe_get(
 
 ```
 
-```{r}
+```{r data_prep_scot, purl=FALSE}
 #Access lines
 vt_opts_1 = c(
     "-select", "osm_id, highway, designation, footway, sidewalk",
@@ -542,8 +542,8 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
 }
 
 #1313 is near Ladybower reservoir in the peak district
-test <- assess_accessibility(944,uk_grid,produce_map = T)
-test
+# test <- assess_accessibility(944,uk_grid,produce_map = T)
+# test
 
 #Assessing memory usage:
 #sort( sapply(ls(),function(x){object.size(get(x),units="Mb")})) 
