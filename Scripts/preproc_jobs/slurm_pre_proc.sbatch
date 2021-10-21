@@ -1,8 +1,8 @@
 #!/bin/bash 
 #SBATCH --partition=short-serial 
 #SBATCH --job-name=accessLayerPreProcessing
-#SBATCH -o out/%A/%a.out
-#SBATCH -e err/%A/%a.err
+#SBATCH -o out/%A_%a.out
+#SBATCH -e err/%A_%a.err
 #SBATCH --time=60:00
 #SBATCH --array=1-3025
 #SBATCH --mem=16000

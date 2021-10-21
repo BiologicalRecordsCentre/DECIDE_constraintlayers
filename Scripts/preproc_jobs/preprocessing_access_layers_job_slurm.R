@@ -277,7 +277,7 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
       addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "red")
     
     #save
-    saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number," generated ",date()))
+    saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number," generated ",date()),selfcontained =F)
     
     #then rename (so that it's using the same supporting files folder as the other maps - to stop uploading endless copies of js libraries)
     file.rename(from = "../docs/access_map_grid.html", to = paste0("../docs/access_map_grid_",grid_number,".html"))
