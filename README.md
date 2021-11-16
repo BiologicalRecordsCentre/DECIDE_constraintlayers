@@ -95,7 +95,25 @@ Note: as of 15/8/21 we have moved the file location of the data so running old s
 
 The `preprocessing_access_layers_v3.Rmd` script contains the code but using the `purl ` function it generates a set of scripts that can either be run as jobs on Rstudio (https://solutions.rstudio.com/r/jobs/) or on JASMIN.
 
-The JASMIN script is set up to take a single argument, the grid number, and loads in all the relevant data for that grid square and returns a dataframe with easting, northing and access score. It can be run using `sbatch` using `slurm_pre_proc.sbatch`.
+The JASMIN script is set up to take a single argument, the grid number (1-3025), and loads in all the relevant data for that grid square and returns a dataframe with easting, northing and access score. Navigate to the directory `DECIDE_constraintlayers/Scripts/preproc_jobs`
+
+Test the script on a single grid square first:
+```
+module add jaspy/3.7/r20200606
+Rscript preprocessing_access_layers_job_slurm.R 1313
+```
+
+Then run it with sbatch using the command
+```
+sbatch slurm_pre_proc.sbatch
+```
+
+Use this command to check the queue (replacing simrol with your JASMIN username)
+```
+squeue -u simrol
+```
+
+Here's a guide to the codes: https://slurm.schedmd.com/squeue.html#SECTION_JOB-STATE-CODES
 
 ### Generating maps
 
