@@ -12,7 +12,7 @@ suppressMessages(suppressWarnings(library(htmlwidgets)))
 suppressMessages(suppressWarnings(library(htmltools))) # for htmlEscape()
 
 
-## ----filepaths----------------------------------------------------------------------------------
+## ----filepaths---------------------------------------------------------------------------------------
 if(exists("job_id")){
   #datalabs
   setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
@@ -40,7 +40,7 @@ if(exists("slurm_grid_id")){
 
 
 
-## ----access_offline_data------------------------------------------------------------------------
+## ----access_offline_data-----------------------------------------------------------------------------
 #base location
 base_location <- file.path(raw_data_location,"")
 
@@ -101,7 +101,51 @@ check_access_lapply <- function(...){
 
 
 
-## ----data_processing----------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------
+get_access_info_lapply <- function(ogfd, ...){
+  
+  #if error turn off spherical geometry
+  tryCatch({
+    sparce <- st_is_within_distance(ogfd, ...)
+  }, error = function(err){
+    sf::sf_use_s2(F)
+    sparce <- st_is_within_distance(ogfd, ...)
+    sf::sf_use_s2(T)
+  })
+  
+  ogfd <- as.data.frame(ogfd)
+  
+  column_to_get <- names(ogfd)[names(ogfd) %in% metadata_col_names]
+  
+  # sometimes designation are NA but highway is always included so for those cases use highway
+  if ("designation" %in% column_to_get){
+    ogfd$designation[is.na(ogfd$designation)] <- ogfd$highway[is.na(ogfd$designation)]
+  }
+  
+  #if there are multiple coolumns that match the main criteria then select one column which appears first in `metadata_col_names`
+  if(length(column_to_get)>1){
+    priorities <- match(column_to_get,metadata_col_names)
+    column_to_get <- column_to_get[which.min(priorities)]
+  }
+  
+  access_type_description <- ogfd[,column_to_get]
+  access_type_description
+  
+  #Cleaning
+  access_type_description[str_detect(access_type_description, "Access Land")] <- "Open access land"
+  access_type_description[str_detect(access_type_description, "Core Path")] <- "Path"
+  
+  sparce
+  # 
+  sparce <- lapply(sparce,FUN = function(x){access_type_description[x] %>% unique() %>% paste(collapse=",")})
+  # # 
+  
+}
+
+metadata_col_names = c('ROW_TYPE', 'function_', 'Descrip','accessType', 'Name', 'fclass','designation','highway',"notes")
+
+
+## ----data_processing---------------------------------------------------------------------------------
 sf::sf_use_s2(T)
 
 #load in required to do the job
@@ -120,7 +164,6 @@ st_crs(uk_grid) <- 27700
 #for testing:
 #grid_number <- 1516
 #grids <- uk_grid
-#raster_df <- raster100_df
 
 #define the function for assessing accessibility
 assess_accessibility <- function(grid_number,grids,produce_map = F){
@@ -129,13 +172,6 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   this_10k_grid <- grids[grid_number,]$geometry #get the 10kgrid
   this_10k_gridWGS84 <- st_transform(this_10k_grid, 4326) # convert to WGS84
   grid_bb <- st_bbox(this_10k_grid)
-  
-  #get the centroids of the the 100m grids within the 10k grid
-  # raster_this_grid <- raster_df %>% filter(x > grid_bb$xmin,
-  #                                             x < grid_bb$xmax,
-  #                                             y > grid_bb$ymin,
-  #                                             y < grid_bb$ymax)
-  
   
   raster_this_grid <- readRDS(file.path(environmental_data_location,paste0("100mrast_grid_",grid_number,".RDS")))
   
@@ -190,7 +226,7 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   distance_check_bad <- distance_check_good <- distance_check_warning <- distance_check_water <- rep(0,nrow(raster_this_grid))
   
   #checking access for offline layers
-  #first try using lapply because it's quickest but then there's an alternative approch which is slower by copes with the spherical geometry issue that sometimes occurs
+  #first try using lapply because it's quickest but then there's an alternative approach which is slower by copes with the spherical geometry issue that sometimes occurs
   tryCatch({
     if (length(offline_good_features_data)>0){
       distance_check_good <- lapply(offline_good_features_data,check_access_lapply,x = raster_as_sf,dist = 100,sparse = FALSE) %>% Reduce(f='+')
@@ -258,10 +294,34 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   raster_as_sf$composite[raster_as_sf$access>0 & raster_as_sf$warning > 0] <- 0.75 # warning
   raster_as_sf$composite[raster_as_sf$water>0] <- 0.25 #water
   
-  #memory checks
-  #sort( sapply(ls(),function(x){object.size(get(x))})) %>% print()
-  #sum( sapply(ls(),function(x){object.size(get(x))})) %>% print()
   
+  # Access metadata --------------------------------------
+  
+  # make a list of all the features to for
+  all_good_features_data <- offline_good_features_data
+  all_good_features_data[[length(all_good_features_data)+1]] <- osm_layer1 #add the osm footpaths
+  all_good_features_data[[length(all_good_features_data)+1]] <- osm_layer1_scot # and the scottish footpaths
+  
+  metadata <- lapply(X = all_good_features_data,FUN = get_access_info_lapply,x = raster_as_sf,dist = 100,sparse = T)
+  metadata2 <- apply(do.call(cbind, metadata),
+                 MARGIN = 1,
+                 FUN = function(x){
+                   x <- paste(x[!x =="character(0)"], collapse = ',')
+                   x <- str_replace_all(x,",,",",") # remove double commas
+                   x <- str_replace_all(x,",,",",") # remove double commas
+                   x <- gsub(",$", "", x) # remove final comma
+                   x <- gsub(",$", "", x)
+                   x <- gsub("^,", "", x)
+                   x <- gsub("^,", "", x)
+                   x
+                   #also need to remove the occasional first comma
+                 })
+  
+  raster_as_sf$metadata <- metadata2
+  
+  raster_as_sf %>% as.data.frame() %>% filter(composite ==0)
+  
+  # produce map -----------------------------------
   if(produce_map){
     m <- leaflet() %>%
       addTiles() %>%
@@ -276,6 +336,8 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
       addCircles(data = raster_as_sf %>% filter(composite==0.75),radius = 50,weight=0,color = "orange") %>%
       addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "red")
     
+    m
+    
     #save
     saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number," generated ",date()),selfcontained = F)
     
@@ -286,13 +348,7 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   
   raster_this_grid$access <- raster_as_sf$composite
   raster100_to_save <- raster_this_grid
-  
-  #raster_df[raster_df$x > grid_bb$xmin & raster_df$x < grid_bb$xmax & raster_df$y > grid_bb$ymin & raster_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
-  
-  # raster100_to_save <- raster_df %>% filter(x > grid_bb$xmin,
-  #                                              x < grid_bb$xmax,
-  #                                              y > grid_bb$ymin,
-  #                                              y < grid_bb$ymax)
+
   
   return(raster100_to_save)
 }
@@ -309,7 +365,7 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
 
 
 
-## ----rstudio_job--------------------------------------------------------------------------------
+## ----rstudio_job-------------------------------------------------------------------------------------
 if(exists("job_id")){
   #set it all off as 8 seperate jobs, saving the individual 10k grids
   log_df <- data.frame(grid_no = 0,time_taken = "",time = "")[-1,]
@@ -331,7 +387,7 @@ if(exists("job_id")){
 
 
 
-## -----------------------------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------
 
 if(exists("slurm_grid_id")){
   
