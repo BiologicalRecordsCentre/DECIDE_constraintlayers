@@ -107,13 +107,20 @@ check_access_lapply <- function(...){
 get_access_info_lapply <- function(ogfd, ...){
   
   #if error turn off spherical geometry
-  tryCatch({
-    sparce <- st_is_within_distance(ogfd, ...)
-  }, error = function(err){
-    sf::sf_use_s2(F)
-    sparce <- st_is_within_distance(ogfd, ...)
-    sf::sf_use_s2(T)
+  within_distance_results <-  tryCatch({
+    
+      st_is_within_distance(ogfd, ...)
+      
+    }, error = function(err){
+      
+      print(err)
+      sf::sf_use_s2(F)
+      st_is_within_distance(ogfd, ...)
+      
   })
+  
+  sf::sf_use_s2(T)
+  
   
   ogfd <- as.data.frame(ogfd)
   
@@ -137,9 +144,10 @@ get_access_info_lapply <- function(ogfd, ...){
   access_type_description[str_detect(access_type_description, "Access Land")] <- "Open access land"
   access_type_description[str_detect(access_type_description, "Core Path")] <- "Path"
   
-  sparce
   # 
-  sparce <- lapply(sparce,FUN = function(x){access_type_description[x] %>% unique() %>% paste(collapse=",")})
+  out <- lapply(within_distance_results,FUN = function(x){access_type_description[x] %>% unique() %>% paste(collapse=",")})
+  
+  out
   # # 
   
 }
@@ -164,7 +172,7 @@ st_crs(uk_grid) <- 27700
 
 
 #for testing:
-#grid_number <- 1317
+#grid_number <- 1516
 #grids <- uk_grid
 
 #define the function for assessing accessibility
