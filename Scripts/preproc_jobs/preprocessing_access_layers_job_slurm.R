@@ -11,6 +11,8 @@ suppressMessages(suppressWarnings(library(dplyr)))
 suppressMessages(suppressWarnings(library(htmlwidgets)))
 suppressMessages(suppressWarnings(library(htmltools))) # for htmlEscape()
 
+suppressMessages(suppressWarnings(library(stringr)))
+
 
 ## ----filepaths---------------------------------------------------------------------------------------
 if(exists("job_id")){
@@ -162,7 +164,7 @@ st_crs(uk_grid) <- 27700
 
 
 #for testing:
-#grid_number <- 1516
+#grid_number <- 1317
 #grids <- uk_grid
 
 #define the function for assessing accessibility
