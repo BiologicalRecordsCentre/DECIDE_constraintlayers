@@ -122,7 +122,9 @@ get_access_info_lapply <- function(ogfd, ...){
   sf::sf_use_s2(T)
   
   
-  ogfd <- as.data.frame(ogfd,stringsAsFactors = F)
+  ogfd <- data.frame(ogfd,stringsAsFactors = F) 
+  
+  
   
   column_to_get <- names(ogfd)[names(ogfd) %in% metadata_col_names]
   
