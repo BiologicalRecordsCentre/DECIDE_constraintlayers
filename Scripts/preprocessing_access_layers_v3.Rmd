@@ -360,7 +360,7 @@ get_access_info_lapply <- function(ogfd, ...){
   
   column_to_get <- names(ogfd)[names(ogfd) %in% metadata_col_names]
   
-  #print(column_to_get)
+  print(column_to_get)
   
   # sometimes designation are NA but highway is always included so for those cases use highway
   if ("designation" %in% column_to_get){
@@ -370,15 +370,15 @@ get_access_info_lapply <- function(ogfd, ...){
   #if there are multiple coolumns that match the main criteria then select one column which appears first in `metadata_col_names`
   if(length(column_to_get)>1){
     priorities <- match(column_to_get,metadata_col_names)
-    #print(priorities)
+    print(priorities)
     column_to_get <- column_to_get[which.min(priorities)]
-    #print(column_to_get)
+    print(column_to_get)
   }
   
   access_type_description <- ogfd[,column_to_get]
   access_type_description
   
-  #print(access_type_description)
+  print(access_type_description)
   
   #Cleaning
   access_type_description[str_detect(access_type_description, "Access Land")] <- "Open access land"
