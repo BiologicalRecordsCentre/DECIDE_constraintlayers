@@ -321,7 +321,6 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   
   raster_as_sf$metadata <- metadata2
   
-  raster_as_sf %>% as.data.frame() %>% filter(composite ==0)
   
   # produce map -----------------------------------
   if(produce_map){
@@ -349,10 +348,9 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   }
   
   raster_this_grid$access <- raster_as_sf$composite
-  raster100_to_save <- raster_this_grid
-
+  raster_this_grid$feat <- raster_as_sf$metadata
   
-  return(raster100_to_save)
+  return(raster_this_grid)
 }
 
 #1313 is near Ladybower reservoir in the peak district
