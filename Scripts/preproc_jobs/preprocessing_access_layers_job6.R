@@ -11,6 +11,8 @@ suppressMessages(suppressWarnings(library(dplyr)))
 suppressMessages(suppressWarnings(library(htmlwidgets)))
 suppressMessages(suppressWarnings(library(htmltools))) # for htmlEscape()
 
+suppressMessages(suppressWarnings(library(stringr)))
+
 
 ## ----filepaths---------------------------------------------------------------------------------------
 if(exists("job_id")){
@@ -105,15 +107,22 @@ check_access_lapply <- function(...){
 get_access_info_lapply <- function(ogfd, ...){
   
   #if error turn off spherical geometry
-  tryCatch({
-    sparce <- st_is_within_distance(ogfd, ...)
-  }, error = function(err){
-    sf::sf_use_s2(F)
-    sparce <- st_is_within_distance(ogfd, ...)
-    sf::sf_use_s2(T)
+  within_distance_results <-  tryCatch({
+    
+      st_is_within_distance(ogfd, ...)
+      
+    }, error = function(err){
+      
+      print(err)
+      sf::sf_use_s2(F)
+      st_is_within_distance(ogfd, ...)
+      
   })
   
-  ogfd <- as.data.frame(ogfd)
+  sf::sf_use_s2(T)
+  
+  ogfd <- data.frame(ogfd,stringsAsFactors = F) 
+  ogfd[] <- lapply(ogfd, as.character)
   
   column_to_get <- names(ogfd)[names(ogfd) %in% metadata_col_names]
   
@@ -131,15 +140,15 @@ get_access_info_lapply <- function(ogfd, ...){
   access_type_description <- ogfd[,column_to_get]
   access_type_description
   
+  
   #Cleaning
   access_type_description[str_detect(access_type_description, "Access Land")] <- "Open access land"
   access_type_description[str_detect(access_type_description, "Core Path")] <- "Path"
   
-  sparce
   # 
-  sparce <- lapply(sparce,FUN = function(x){access_type_description[x] %>% unique() %>% paste(collapse=",")})
-  # # 
+  out <- lapply(within_distance_results,FUN = function(x){access_type_description[x] %>% unique() %>% paste(collapse=",")})
   
+  out
 }
 
 metadata_col_names = c('ROW_TYPE', 'function_', 'Descrip','accessType', 'Name', 'fclass','designation','highway',"notes")
@@ -319,7 +328,6 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   
   raster_as_sf$metadata <- metadata2
   
-  raster_as_sf %>% as.data.frame() %>% filter(composite ==0)
   
   # produce map -----------------------------------
   if(produce_map){
@@ -347,10 +355,9 @@ assess_accessibility <- function(grid_number,grids,produce_map = F){
   }
   
   raster_this_grid$access <- raster_as_sf$composite
-  raster100_to_save <- raster_this_grid
-
+  raster_this_grid$feat <- raster_as_sf$metadata
   
-  return(raster100_to_save)
+  return(raster_this_grid)
 }
 
 #1313 is near Ladybower reservoir in the peak district
