@@ -71,6 +71,8 @@ suppressMessages(suppressWarnings(library(rgdal)))
 suppressMessages(suppressWarnings(library(dplyr)))
 suppressMessages(suppressWarnings(library(htmlwidgets)))
 suppressMessages(suppressWarnings(library(htmltools))) # for htmlEscape()
+
+suppressMessages(suppressWarnings(library(stringr)))
 ```
 
 Set working directories and file directories for datalabs or JASMIN
@@ -407,7 +409,7 @@ st_crs(uk_grid) <- 27700
 
 
 #for testing:
-#grid_number <- 1516
+#grid_number <- 1317
 #grids <- uk_grid
 
 #define the function for assessing accessibility
