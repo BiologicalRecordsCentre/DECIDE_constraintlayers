@@ -2,6 +2,7 @@
 
 library(purrr)
 library(dplyr) 
+library(fst)
 
 
 #set working directory to `/processed_data`
@@ -14,9 +15,10 @@ df <- list.files(pattern = ".RDS") %>%
   map(readRDS) %>% 
   bind_rows()
 
+str(df)
 
 #for testing purposes only work with 10000 rows 
-df <- sample_n(df,1000)
+df <- sample_n(df)
 
 #clean access feature names
 unique_types <- strsplit(df$feat,split = ",") %>% unlist() %>% unique()
@@ -54,15 +56,78 @@ df$feat <- strsplit(df$feat,split = ",") %>% lapply(function(x){
   paste(x,collapse=",")
 }) %>% unlist()
 
-strsplit(df$feat,split = ",") %>% unlist() %>% unique()
-
-
-
-
-
+#strsplit(df$feat,split = ",") %>% unlist() %>% unique()
 
 # clean to lowercase?
 
 
 
 # remove NAs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+setwd("/data/data/DECIDE_constraintlayers/metadata_tables")
+
+#making lots of files
+
+x_breaks <- seq(from = 0,to = 700000, by = 10000)
+y_breaks <- seq(from = 0,to = 1300000, by = 10000)
+
+files <- expand.grid(x = x_breaks,y = y_breaks) %>% data.frame()
+options("scipen"=10)
+
+files$file_names <- paste0(files$x,"-",files$y,".fst")
+
+
+str(files)
+
+for (i in 1564:nrow(files)){
+  print(i)
+  df_temp <- df %>% filter(x >= files$x[i],
+                           x <  files$x[i]+10000,
+                           y >= files$y[i],
+                           y <  files$y[i]+10000)
+  
+  if(nrow(df_temp)>0){
+    write_fst(df_temp,files$file_names[i])
+  }
+}
+
+
+
+
+# 
+# #vector of xs and vectory of ys
+# get_meta_data <- function(x,y){
+#   x_grid <- (x %/% 10000) * 10000
+#   y_grid <- (y %/% 10000) * 10000
+#   
+#   # read files
+#   file_location <- 
+#   
+#   # bind files
+#   
+#   #return meta data
+#   
+# }
+
+
+
+
+
+
+
+
+

@@ -4,6 +4,10 @@ library(raster)
 library(dplyr) # or magrittr for the pipe (%>%)
 
 #set working directory to `/processed_data`
+if(F){
+  setwd("/data/data/DECIDE_constraintlayers/processed_data") # datalabs
+}
+
 # run these lines in R on jasmin
 
 #load in all the data
@@ -13,6 +17,10 @@ df <- list.files(pattern = ".RDS") %>%
 
 #make a raster from the data
 big_raster <- rasterFromXYZ(df)
+
+
+
+
 
 #set the CRS
 #crs(big_raster) <- 27700
