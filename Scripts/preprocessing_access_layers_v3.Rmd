@@ -379,13 +379,16 @@ get_access_info_lapply <- function(ogfd, ...){
   access_type_description[str_detect(access_type_description, "Access Land")] <- "Open access land"
   access_type_description[str_detect(access_type_description, "Core Path")] <- "Path"
   
+  print(within_distance_results)
+  print(access_type_description[within_distance_results[[1]]])
+  
   # 
   out <- lapply(within_distance_results,FUN = function(x){access_type_description[x] %>% unique() %>% paste(collapse=",")})
   
   out
 }
 
-metadata_col_names = c('ROW_TYPE', 'function_', 'Descrip','accessType', 'Name', 'fclass','designation','highway',"notes")
+metadata_col_names = c(  "objct_t","object_type","NAME","path_name",'ROW_TYPE', 'function_', 'Descrip','accessType', 'Name', 'fclass','designation','highway',"notes")
 ```
 
 ## Data processing
@@ -416,7 +419,7 @@ st_crs(uk_grid) <- 27700
 
 
 #for testing:
-#grid_number <- 1516
+#grid_number <- 2918 #1516 #2936 # 2926 #2918
 #grids <- uk_grid
 
 #define the function for assessing accessibility
@@ -644,7 +647,7 @@ if(exists("job_id")){
   for (i in job_sequence[job_id]:job_sequence[job_id+1]){
     cat(paste('\r grid:',i," progress:",round((i-job_sequence[job_id])/378*100),"%"))
     time_taken <- system.time({
-      access_raster <- assess_accessibility(i,uk_grid,produce_map = T)
+      access_raster <- assess_accessibility(i,uk_grid,produce_map = F)
       })
     
     log_df[nrow(log_df)+1,] <- c(i,time_taken[3],Sys.time()%>% toString())
@@ -666,7 +669,7 @@ Just save the file and print the time taken
 if(exists("slurm_grid_id")){
   
   time_taken <- system.time({
-    access_raster <- assess_accessibility(slurm_grid_id,uk_grid,produce_map = T)
+    access_raster <- assess_accessibility(slurm_grid_id,uk_grid,produce_map = F)
     })
   
   if(exists("access_raster")){
