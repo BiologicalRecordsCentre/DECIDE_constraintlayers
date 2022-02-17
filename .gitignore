@@ -25,6 +25,7 @@ Data_old/
 
 # RStudio files
 .Rproj.user/
+.Rproj.user.old/
 
 # produced vignettes
 vignettes/*.html

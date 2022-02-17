@@ -1,17 +1,20 @@
 job_id <- 4
-#THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT if generating job files
+#THIS LINE IS REPLACED WITH JOB ID ASSIGNMENT if generating job or JASMIN files
 #load packages
-library(osmextract) #for using overpass API
-library(sf)
-library(leaflet) # for making maps for sanity checking
-library(raster)
-library(rgdal)
-library(dplyr)
-library(htmlwidgets)
+#messages suppressed so that the .err file from JASMIN/slurm only contains errors: https://stackoverflow.com/questions/14834841/when-does-quietly-true-actually-work-in-the-require-function
+suppressMessages(suppressWarnings(library(osmextract))) #for using overpass API
+suppressMessages(suppressWarnings(library(sf))) #for all the geographic operations
+suppressMessages(suppressWarnings(library(leaflet))) # for making maps for sanity checking
+suppressMessages(suppressWarnings(library(raster)))
+suppressMessages(suppressWarnings(library(rgdal)))
+suppressMessages(suppressWarnings(library(dplyr)))
+suppressMessages(suppressWarnings(library(htmlwidgets)))
+suppressMessages(suppressWarnings(library(htmltools))) # for htmlEscape()
+
+suppressMessages(suppressWarnings(library(stringr)))
 
 
-
-## ---------------------------------------------------------------------------------------------
+## ----filepaths---------------------------------------------------------------------------------------
 if(exists("job_id")){
   #datalabs
   setwd(file.path("","data","notebooks","rstudio-conlayersimon","DECIDE_constraintlayers","Scripts"))
@@ -37,7 +40,9 @@ if(exists("slurm_grid_id")){
 
 
 
-## ----access_offline_data----------------------------------------------------------------------
+
+
+## ----access_offline_data-----------------------------------------------------------------------------
 #base location
 base_location <- file.path(raw_data_location,"")
 
@@ -45,11 +50,20 @@ base_location <- file.path(raw_data_location,"")
 file_locations <- c(
   'CRoW_Act_2000_-_Access_Layer_(England)-shp/gridded_data_10km/',
   'OS_greenspaces/OS Open Greenspace (ESRI Shape File) GB/data/gridded_greenspace_data_10km/',
-  #'SSSIs/gridded_data_10km/',
   'greater-london-latest-free/london_gridded_data_10km/',
   'rowmaps_footpathbridleway/rowmaps_footpathbridleway/gridded_data_10km/',
   #'RSPB_Reserve_Boundaries/gridded_data_10km/',
-  'national_trust/gridded_data_10km/'
+  'national_trust/gridded_data_10km/',
+  
+  'Scotland/cairngorms/gridded_data_10km/',
+  'Scotland/core_paths/gridded_data_10km/',
+  'Scotland/local_nature_conservation_sites/gridded_data_10km/',
+  'Scotland/local_nature_reserves/gridded_data_10km/',
+  'Scotland/lochlomond_tross/gridded_data_10km/',
+  'Scotland/public_access_rural/gridded_data_10km/',
+  'Scotland/public_access_wiat/gridded_data_10km/',
+  'Scotland/wildland_scotland/gridded_data_10km/'
+  
 )
 
 # function to get the data
@@ -89,43 +103,92 @@ check_access_lapply <- function(...){
 
 
 
-## ----data_processing--------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------
+get_access_info_lapply <- function(ogfd, ...){
+  
+  #if error turn off spherical geometry
+  within_distance_results <-  tryCatch({
+    
+      st_is_within_distance(ogfd, ...)
+      
+    }, error = function(err){
+      
+      print(err)
+      sf::sf_use_s2(F)
+      st_is_within_distance(ogfd, ...)
+      
+  })
+  
+  sf::sf_use_s2(T)
+  
+  ogfd <- data.frame(ogfd,stringsAsFactors = F) 
+  ogfd[] <- lapply(ogfd, as.character)
+  
+  column_to_get <- names(ogfd)[names(ogfd) %in% metadata_col_names]
+  
+  # sometimes designation are NA but highway is always included so for those cases use highway
+  if ("designation" %in% column_to_get){
+    ogfd$designation[is.na(ogfd$designation)] <- ogfd$highway[is.na(ogfd$designation)]
+  }
+  
+  #if there are multiple coolumns that match the main criteria then select one column which appears first in `metadata_col_names`
+  if(length(column_to_get)>1){
+    priorities <- match(column_to_get,metadata_col_names)
+    column_to_get <- column_to_get[which.min(priorities)]
+  }
+  
+  access_type_description <- ogfd[,column_to_get]
+  access_type_description
+  
+  
+  #Cleaning
+  access_type_description[str_detect(access_type_description, "Access Land")] <- "Open access land"
+  access_type_description[str_detect(access_type_description, "Core Path")] <- "Path"
+  
+  # 
+  out <- lapply(within_distance_results,FUN = function(x){access_type_description[x] %>% unique() %>% paste(collapse=",")})
+  
+  out
+}
+
+metadata_col_names = c('ROW_TYPE', 'function_', 'Descrip','accessType', 'Name', 'fclass','designation','highway',"notes")
+
+
+## ----data_processing---------------------------------------------------------------------------------
 sf::sf_use_s2(T)
 
 #load in required to do the job
 
-uk_grid <- st_read(file.path(raw_data_location,'UK_grids','uk_grid_10km.shp'))
+uk_grid <- st_read(file.path(raw_data_location,'UK_grids','uk_grid_10km.shp'),quiet = T)
 st_crs(uk_grid) <- 27700
 
 # the big raster
-raster100 <- raster::stack(file.path(environmental_data_location,'100mRastOneLayer.grd'))
+#raster100 <- raster::stack(file.path(environmental_data_location,'100mRastOneLayer.grd'))
 #plot(raster100)
 #get the CRS for when we project back to raster from data ramew
-raster_crs <- st_crs(raster100)
-raster100_df <- as.data.frame(raster100, xy=T, centroids=TRUE)[,1:2]
+#raster_crs <- st_crs(raster100)
+#raster100_df <- as.data.frame(raster100, xy=T, centroids=TRUE)[,1:2]
 
 
 #for testing:
 #grid_number <- 1516
 #grids <- uk_grid
-#raster_df <- raster100_df
 
 #define the function for assessing accessibility
-assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
+assess_accessibility <- function(grid_number,grids,produce_map = F){
   
   #load 10k grid
   this_10k_grid <- grids[grid_number,]$geometry #get the 10kgrid
   this_10k_gridWGS84 <- st_transform(this_10k_grid, 4326) # convert to WGS84
   grid_bb <- st_bbox(this_10k_grid)
   
-  #get the centroids of the the 100m grids within the 10k grid
-  raster_this_grid <- raster100_df %>% filter(x > grid_bb$xmin,
-                                              x < grid_bb$xmax,
-                                              y > grid_bb$ymin,
-                                              y < grid_bb$ymax)
+  raster_this_grid <- readRDS(file.path(environmental_data_location,paste0("100mrast_grid_",grid_number,".RDS")))
+  
+  #LOAD raster_this_grid from file
+  
   
   #get the easting and northing projection
-  projcrs <- crs(this_10k_grid)
+  projcrs <- st_crs(this_10k_grid)
   
   # make the raster df into a sd object using the projection but transform it to WGS84 for these operations
   raster_as_sf <- st_as_sf(raster_this_grid,coords = c("x", "y"),crs = projcrs) %>% st_transform(4326)
@@ -134,6 +197,11 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   
   # load OSM data
   osm_layer1 <- st_read(file.path(raw_data_location,"OSM","access_lines.gpkg"),
+                        wkt_filter = this_10k_gridWGS84_wkt,
+                        quiet = T
+                        )
+  
+  osm_layer1_scot <- st_read(file.path(raw_data_location,"OSM","access_lines_scot.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
                         )
@@ -146,12 +214,12 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   osm_layer3_no_go <- st_read(file.path(raw_data_location,"OSM","no_go_areas.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
-                        ) %>% filter(landuse != "military")
+                        ) %>% filter(aeroway == "aerodrome") 
   
   osm_layer3_warn <- st_read(file.path(raw_data_location,"OSM","no_go_areas.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
                         quiet = T
-                        ) %>% filter(landuse == "military")
+                        ) %>% filter(landuse %in% c("military",'quarry','landfill','industrial'))
 
   osm_layer4 <- st_read(file.path(raw_data_location,"OSM","water_areas.gpkg"),
                         wkt_filter = this_10k_gridWGS84_wkt,
@@ -167,7 +235,7 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   distance_check_bad <- distance_check_good <- distance_check_warning <- distance_check_water <- rep(0,nrow(raster_this_grid))
   
   #checking access for offline layers
-  #first try using lapply because it's quickest but then there's an alternative approch which is slower by copes with the spherical geometry issue that sometimes occurs
+  #first try using lapply because it's quickest but then there's an alternative approach which is slower by copes with the spherical geometry issue that sometimes occurs
   tryCatch({
     if (length(offline_good_features_data)>0){
       distance_check_good <- lapply(offline_good_features_data,check_access_lapply,x = raster_as_sf,dist = 100,sparse = FALSE) %>% Reduce(f='+')
@@ -189,7 +257,10 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   tryCatch({
     #check OSM data
     #good lines
-    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1,dist = 100,sparse = FALSE))  
+    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1,dist = 100,sparse = FALSE))
+    
+    #Scottish tracks and other features that we might want to exclude in England/Wales
+    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1_scot,dist = 100,sparse = FALSE))
     
     #bad lines and areas
     distance_check_bad <- distance_check_bad + rowSums(st_is_within_distance(raster_as_sf,osm_layer2,dist = 50,sparse = FALSE)) + rowSums(st_is_within_distance(raster_as_sf,osm_layer3_no_go,dist = 25,sparse = FALSE)) 
@@ -204,13 +275,13 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
     #same as before but without spherical geometry
     sf::sf_use_s2(F)
     distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1,dist = 100,sparse = FALSE))  
+    distance_check_good <- distance_check_good + rowSums(st_is_within_distance(raster_as_sf,osm_layer1_scot,dist = 100,sparse = FALSE))
+    
     distance_check_bad <- distance_check_bad + rowSums(st_is_within_distance(raster_as_sf,osm_layer2,dist = 50,sparse = FALSE)) + rowSums(st_is_within_distance(raster_as_sf,osm_layer3_no_go,dist = 25,sparse = FALSE)) 
     distance_check_warning <- distance_check_warning + rowSums(st_is_within_distance(raster_as_sf,osm_layer3_warn,dist = 25,sparse = FALSE))
     distance_check_water <- distance_check_water + rowSums(st_is_within_distance(raster_as_sf,osm_layer4,dist = 0,sparse = FALSE))
     sf::sf_use_s2(T)
   })
-  
-  
   
   # water buffering options (currently not used)
   # if(sum(distance_check_water>0)>0){
@@ -220,7 +291,6 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   #   distance_check_water <- 0
   #   distance_check_water[rownames(raster_as_sf) %in% rownames(buffered_water_points)[points_in_water>0]] <- 1
   # }
-  
   
   raster_as_sf$access <- distance_check_good
   raster_as_sf$no_go <- distance_check_bad
@@ -233,6 +303,33 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
   raster_as_sf$composite[raster_as_sf$access>0 & raster_as_sf$warning > 0] <- 0.75 # warning
   raster_as_sf$composite[raster_as_sf$water>0] <- 0.25 #water
   
+  
+  # Access metadata --------------------------------------
+  
+  # make a list of all the features to for
+  all_good_features_data <- offline_good_features_data
+  all_good_features_data[[length(all_good_features_data)+1]] <- osm_layer1 #add the osm footpaths
+  all_good_features_data[[length(all_good_features_data)+1]] <- osm_layer1_scot # and the scottish footpaths
+  
+  metadata <- lapply(X = all_good_features_data,FUN = get_access_info_lapply,x = raster_as_sf,dist = 100,sparse = T)
+  metadata2 <- apply(do.call(cbind, metadata),
+                 MARGIN = 1,
+                 FUN = function(x){
+                   x <- paste(x[!x =="character(0)"], collapse = ',')
+                   x <- str_replace_all(x,",,",",") # remove double commas
+                   x <- str_replace_all(x,",,",",") # remove double commas
+                   x <- gsub(",$", "", x) # remove final comma
+                   x <- gsub(",$", "", x)
+                   x <- gsub("^,", "", x)
+                   x <- gsub("^,", "", x)
+                   x
+                   #also need to remove the occasional first comma
+                 })
+  
+  raster_as_sf$metadata <- metadata2
+  
+  
+  # produce map -----------------------------------
   if(produce_map){
     m <- leaflet() %>%
       addTiles() %>%
@@ -240,36 +337,42 @@ assess_accessibility <- function(grid_number,grids,raster_df,produce_map = F){
       addPolylines(data = osm_layer2,weight = 1,color = "red") %>%
       addPolygons(data = osm_layer3_warn,weight = 1,fillColor ="orange") %>%
       addPolygons(data = osm_layer3_no_go,weight = 1,fillColor ="red") %>%
-      addPolygons(data = osm_layer4,weight = 1) %>%
+      #addPolygons(data = osm_layer4,weight = 1) %>%
       addPolygons(data=this_10k_grid %>% st_transform(4326) ,opacity=1,fillOpacity = 0,weight=2,color = "black") %>%
       addCircles(data = raster_as_sf %>% filter(composite==1),radius = 50,weight=0,color = "blue") %>%
       addCircles(data = raster_as_sf %>% filter(composite==0),radius = 50,weight=0,color = "red") %>%
       addCircles(data = raster_as_sf %>% filter(composite==0.75),radius = 50,weight=0,color = "orange") %>%
-      addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "white")
+      addCircles(data = raster_as_sf %>% filter(composite==0.25),radius = 50,weight=0,color = "red")
     
-    return(m)
+    m
+    
+    #save
+    saveWidget(m, file="../docs/access_map_grid.html",title =  paste0("Grid: ",grid_number," generated ",date()),selfcontained = F)
+    
+    #then rename (so that it's using the same supporting files folder as the other maps - to stop uploading endless copies of js libraries)
+    file.rename(from = "../docs/access_map_grid.html", to = paste0("../docs/access_map_grid_",grid_number,".html"))
+    #return(m)
   }
   
+  raster_this_grid$access <- raster_as_sf$composite
+  raster_this_grid$feat <- raster_as_sf$metadata
   
-  raster100_df[raster100_df$x > grid_bb$xmin & raster100_df$x < grid_bb$xmax & raster100_df$y > grid_bb$ymin & raster100_df$y < grid_bb$ymax,"access"] <- raster_as_sf$composite
-  
-  raster100_to_save <- raster100_df %>% filter(x > grid_bb$xmin,
-                                               x < grid_bb$xmax,
-                                               y > grid_bb$ymin,
-                                               y < grid_bb$ymax)
-  
-  return(raster100_to_save)
+  return(raster_this_grid)
 }
 
-#test <- assess_accessibility(1313,uk_grid,raster100_df,produce_map = F)
+#1313 is near Ladybower reservoir in the peak district
+# test <- assess_accessibility(944,uk_grid,produce_map = T)
+# test
+
+#Assessing memory usage:
+#sort( sapply(ls(),function(x){object.size(get(x),units="Mb")})) 
+#print(object.size(x=lapply(ls(), get)), units="Mb")
 
 
 
 
 
-
-
-## ----rstudio_job------------------------------------------------------------------------------
+## ----rstudio_job-------------------------------------------------------------------------------------
 if(exists("job_id")){
   #set it all off as 8 seperate jobs, saving the individual 10k grids
   log_df <- data.frame(grid_no = 0,time_taken = "",time = "")[-1,]
@@ -278,7 +381,7 @@ if(exists("job_id")){
   for (i in job_sequence[job_id]:job_sequence[job_id+1]){
     cat(paste('\r grid:',i," progress:",round((i-job_sequence[job_id])/378*100),"%"))
     time_taken <- system.time({
-      access_raster <- assess_accessibility(i,uk_grid,raster100_df,produce_map = F)
+      access_raster <- assess_accessibility(i,uk_grid,produce_map = T)
       })
     
     log_df[nrow(log_df)+1,] <- c(i,time_taken[3],Sys.time()%>% toString())
@@ -291,13 +394,19 @@ if(exists("job_id")){
 
 
 
-## ---------------------------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------
 
 if(exists("slurm_grid_id")){
   
   time_taken <- system.time({
-    access_raster <- assess_accessibility(slurm_grid_id,uk_grid,raster100_df,produce_map = F)
+    access_raster <- assess_accessibility(slurm_grid_id,uk_grid,produce_map = T)
     })
+  
+  if(exists("access_raster")){
+    print("Success, preprocced access raster produced!")
+  } else {
+    print("Failure, preprocced access raster not produced!")
+  }
     
   saveRDS(access_raster,file = paste0(processed_data_location,"/access_raster_grid",slurm_grid_id,".RDS"))
   
